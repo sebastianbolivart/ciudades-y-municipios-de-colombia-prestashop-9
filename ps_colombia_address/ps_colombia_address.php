@@ -254,9 +254,9 @@ class Ps_colombia_address extends Module
             return -1;
         }
 
-        $db         = Db::getInstance();
-        $table      = 'colombia_municipality';
-        $tableSql   = _DB_PREFIX_ . $table;
+        $db       = Db::getInstance();
+        $table    = 'colombia_municipality';
+        $tableSql = $this->resolveSqlTableName($db, $table);
 
         // Truncate before a fresh import so the admin "re-import" scenario works.
         $db->execute('TRUNCATE TABLE `' . bqSQL($tableSql) . '`');
@@ -295,7 +295,7 @@ class Ps_colombia_address extends Module
                 $lon = 0.0;
             }
 
-            if ($db->insert($table, [
+            if ($this->dbInsertSafe($db, $table, [
                 'department'  => pSQL($dept),
                 'municipality' => pSQL($muni),
                 'postal_code' => pSQL($postal),
@@ -502,7 +502,7 @@ class Ps_colombia_address extends Module
 
         $db       = Db::getInstance();
         $table    = 'colombia_address_extra';
-        $tableSql = _DB_PREFIX_ . $table;
+        $tableSql = $this->resolveSqlTableName($db, $table);
 
         // Upsert: update if exists, insert if not.
         $exists = (int) $db->getValue(
@@ -510,18 +510,84 @@ class Ps_colombia_address extends Module
         );
 
         if ($exists > 0) {
-            $db->update($table, [
+            $this->dbUpdateSafe($db, $table, [
                 'dane_code'  => $daneCode,
                 'latitude'   => $latitude,
                 'longitude'  => $longitude,
             ], '`id_address` = ' . $idAddress);
         } else {
-            $db->insert($table, [
+            $this->dbInsertSafe($db, $table, [
                 'id_address' => $idAddress,
                 'dane_code'  => $daneCode,
                 'latitude'   => $latitude,
                 'longitude'  => $longitude,
             ]);
         }
+    }
+
+    /**
+     * Resolve an existing SQL table name for raw queries.
+     * Prefers prefixed table, but supports legacy/manual unprefixed tables.
+     */
+    private function resolveSqlTableName(Db $db, string $table): string
+    {
+        $prefixed = _DB_PREFIX_ . $table;
+
+        if ($this->tableExists($db, $prefixed)) {
+            return $prefixed;
+        }
+
+        if ($this->tableExists($db, $table)) {
+            return $table;
+        }
+
+        return $prefixed;
+    }
+
+    /**
+     * Safe insert supporting both prefixed and unprefixed table naming.
+     */
+    private function dbInsertSafe(Db $db, string $table, array $data): bool
+    {
+        $prefixed = _DB_PREFIX_ . $table;
+
+        if ($this->tableExists($db, $prefixed)) {
+            return (bool) $db->insert($table, $data, false, true, Db::INSERT, true);
+        }
+
+        if ($this->tableExists($db, $table)) {
+            return (bool) $db->insert($table, $data, false, true, Db::INSERT, false);
+        }
+
+        return (bool) $db->insert($table, $data, false, true, Db::INSERT, true);
+    }
+
+    /**
+     * Safe update supporting both prefixed and unprefixed table naming.
+     */
+    private function dbUpdateSafe(Db $db, string $table, array $data, string $where): bool
+    {
+        $prefixed = _DB_PREFIX_ . $table;
+
+        if ($this->tableExists($db, $prefixed)) {
+            return (bool) $db->update($table, $data, $where, 0, false, true, true);
+        }
+
+        if ($this->tableExists($db, $table)) {
+            return (bool) $db->update($table, $data, $where, 0, false, true, false);
+        }
+
+        return (bool) $db->update($table, $data, $where, 0, false, true, true);
+    }
+
+    /**
+     * Check if a table exists in current database.
+     */
+    private function tableExists(Db $db, string $tableName): bool
+    {
+        $escaped = pSQL($tableName);
+        $sql = "SHOW TABLES LIKE '" . $escaped . "'";
+
+        return (bool) $db->getValue($sql);
     }
 }
