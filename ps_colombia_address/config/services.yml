@@ -1,0 +1,44 @@
+# ps_colombia_address — Symfony Service Definitions
+#
+# Registers:
+#   1. ColombiaAddressService   – data-access service
+#   2. ColombiaAddressFormModifier  – hooks into PS address form builders
+#   3. ColombiaAddressController – back-office Symfony controller
+#
+# All services are lazy-loaded (lazy: true) so they impose no overhead
+# on pages that do not use them.
+
+services:
+
+  # ── Address data service ──────────────────────────────────────────────────
+
+  ps_colombia_address.address_service:
+    class: PsColombiaAddress\Service\ColombiaAddressService
+    lazy: true
+    arguments:
+      - '@=service("doctrine.dbal.default_connection").getWrappedConnection()'
+                                # Alternatively use the legacy Db façade injected below:
+      # The constructor expects a Db instance and the table prefix.
+      # We pass the legacy façade for compatibility with PrestaShop's DB layer.
+    # Simpler construction using the PrestaShop Db legacy instance:
+    factory: ['PsColombiaAddress\Service\ColombiaAddressServiceFactory', 'create']
+    public: true
+
+  # ── Form modifier ─────────────────────────────────────────────────────────
+
+  ps_colombia_address.form.modifier:
+    class: PsColombiaAddress\Form\ColombiaAddressFormModifier
+    lazy: true
+    public: true
+
+  # ── Admin controller ──────────────────────────────────────────────────────
+
+  PsColombiaAddress\Controller\Admin\ColombiaAddressController:
+    parent: PrestaShopBundle\Controller\Admin\FrameworkBundleAdminController
+    lazy: true
+    public: true
+    autoconfigure: true
+    arguments:
+      - '@ps_colombia_address.address_service'
+    tags:
+      - { name: 'controller.service_arguments' }

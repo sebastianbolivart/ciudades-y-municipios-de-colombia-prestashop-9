@@ -1,0 +1,181 @@
+{#
+  Admin configuration dashboard for ps_colombia_address.
+
+  Displays:
+    • Module status toggle
+    • Feature flags (dropdown, autofill, autocomplete, logistics mode)
+    • Dataset summary
+    • Link to the municipality manager
+
+  All form inputs are protected by a Symfony CSRF token.
+  Outputs are escaped with Twig's default auto-escaping (htmlspecialchars).
+#}
+{% extends '@PrestaShop/Admin/layout.html.twig' %}
+
+{% block title %}Colombia Address Manager{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div class="page-head-top">
+    <div class="page-title">
+      <span class="title-meta">{{ 'Colombia Address Manager'|trans({}, 'Modules.PsColombiaAddress.Admin') }}</span>
+      <h2>{{ 'Configuration'|trans({}, 'Modules.PsColombiaAddress.Admin') }}</h2>
+    </div>
+  </div>
+</div>
+
+<div class="content-div">
+
+  {# Flash messages #}
+  {% for label, messages in app.flashes %}
+    {% for message in messages %}
+      <div class="alert alert-{{ label == 'success' ? 'success' : 'danger' }} alert-dismissible" role="alert">
+        <button type="button" class="close" data-dismiss="alert" aria-label="{{ 'Close'|trans }}">
+          <span aria-hidden="true">&times;</span>
+        </button>
+        {{ message|e }}
+      </div>
+    {% endfor %}
+  {% endfor %}
+
+  {# Dataset summary card #}
+  <div class="card mb-4">
+    <div class="card-header">
+      <h3 class="card-header-title">{{ 'Dataset Status'|trans({}, 'Modules.PsColombiaAddress.Admin') }}</h3>
+    </div>
+    <div class="card-body">
+      <p>
+        {{ 'Municipalities loaded:'|trans({}, 'Modules.PsColombiaAddress.Admin') }}
+        <strong>{{ datasetCount }}</strong>
+      </p>
+      <a href="{{ path('admin_colombia_address_municipalities') }}" class="btn btn-outline-primary btn-sm">
+        {{ 'Manage dataset →'|trans({}, 'Modules.PsColombiaAddress.Admin') }}
+      </a>
+    </div>
+  </div>
+
+  {# Configuration form #}
+  <div class="card">
+    <div class="card-header">
+      <h3 class="card-header-title">{{ 'Module Settings'|trans({}, 'Modules.PsColombiaAddress.Admin') }}</h3>
+    </div>
+    <div class="card-body">
+      <form method="post" action="{{ path('admin_colombia_address_save') }}">
+
+        {# CSRF token #}
+        <input type="hidden" name="_token" value="{{ csrf_token('colombia_address_config') }}">
+
+        {# Enable module #}
+        <div class="form-group row">
+          <label class="col-sm-3 col-form-label" for="enable">
+            {{ 'Enable module'|trans({}, 'Modules.PsColombiaAddress.Admin') }}
+          </label>
+          <div class="col-sm-9">
+            <div class="ps-switch">
+              <input type="checkbox" id="enable" name="enable" value="1"
+                     {{ enableModule ? 'checked' : '' }}>
+              <label for="enable">
+                <span>{{ 'Yes'|trans({}, 'Admin.Global') }}</span>
+                <span>{{ 'No'|trans({}, 'Admin.Global') }}</span>
+                <a class="slide-button btn"></a>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <hr>
+
+        {# Municipality dropdown #}
+        <div class="form-group row">
+          <label class="col-sm-3 col-form-label" for="enable_dropdown">
+            {{ 'Enable municipality dropdown'|trans({}, 'Modules.PsColombiaAddress.Admin') }}
+          </label>
+          <div class="col-sm-9">
+            <div class="ps-switch">
+              <input type="checkbox" id="enable_dropdown" name="enable_dropdown" value="1"
+                     {{ enableDropdown ? 'checked' : '' }}>
+              <label for="enable_dropdown">
+                <span>{{ 'Yes'|trans({}, 'Admin.Global') }}</span>
+                <span>{{ 'No'|trans({}, 'Admin.Global') }}</span>
+                <a class="slide-button btn"></a>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        {# Autofill postal code #}
+        <div class="form-group row">
+          <label class="col-sm-3 col-form-label" for="autofill_postal">
+            {{ 'Autofill postal code'|trans({}, 'Modules.PsColombiaAddress.Admin') }}
+          </label>
+          <div class="col-sm-9">
+            <div class="ps-switch">
+              <input type="checkbox" id="autofill_postal" name="autofill_postal" value="1"
+                     {{ autofillPostal ? 'checked' : '' }}>
+              <label for="autofill_postal">
+                <span>{{ 'Yes'|trans({}, 'Admin.Global') }}</span>
+                <span>{{ 'No'|trans({}, 'Admin.Global') }}</span>
+                <a class="slide-button btn"></a>
+              </label>
+            </div>
+            <p class="help-block">
+              {{ 'Automatically fills the postal code field when a municipality is selected.'|trans({}, 'Modules.PsColombiaAddress.Admin') }}
+            </p>
+          </div>
+        </div>
+
+        {# Autocomplete search #}
+        <div class="form-group row">
+          <label class="col-sm-3 col-form-label" for="enable_autocomplete">
+            {{ 'Enable municipality autocomplete'|trans({}, 'Modules.PsColombiaAddress.Admin') }}
+          </label>
+          <div class="col-sm-9">
+            <div class="ps-switch">
+              <input type="checkbox" id="enable_autocomplete" name="enable_autocomplete" value="1"
+                     {{ enableAutocomplete ? 'checked' : '' }}>
+              <label for="enable_autocomplete">
+                <span>{{ 'Yes'|trans({}, 'Admin.Global') }}</span>
+                <span>{{ 'No'|trans({}, 'Admin.Global') }}</span>
+                <a class="slide-button btn"></a>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        {# Logistics mode #}
+        <div class="form-group row">
+          <label class="col-sm-3 col-form-label" for="logistics_mode">
+            {{ 'Logistics mode (expose DANE codes to shipping modules)'|trans({}, 'Modules.PsColombiaAddress.Admin') }}
+          </label>
+          <div class="col-sm-9">
+            <div class="ps-switch">
+              <input type="checkbox" id="logistics_mode" name="logistics_mode" value="1"
+                     {{ logisticsMode ? 'checked' : '' }}>
+              <label for="logistics_mode">
+                <span>{{ 'Yes'|trans({}, 'Admin.Global') }}</span>
+                <span>{{ 'No'|trans({}, 'Admin.Global') }}</span>
+                <a class="slide-button btn"></a>
+              </label>
+            </div>
+            <p class="help-block">
+              {{ 'Stores the DANE code alongside the address. Useful for shipping-carrier API integrations.'|trans({}, 'Modules.PsColombiaAddress.Admin') }}
+            </p>
+          </div>
+        </div>
+
+        <hr>
+
+        <div class="form-group row">
+          <div class="col-sm-9 offset-sm-3">
+            <button type="submit" class="btn btn-primary">
+              {{ 'Save configuration'|trans({}, 'Modules.PsColombiaAddress.Admin') }}
+            </button>
+          </div>
+        </div>
+
+      </form>
+    </div>{# /card-body #}
+  </div>{# /card #}
+
+</div>{# /content-div #}
+{% endblock %}

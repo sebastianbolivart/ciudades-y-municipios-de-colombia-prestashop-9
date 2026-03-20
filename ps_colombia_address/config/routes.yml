@@ -1,0 +1,37 @@
+# ps_colombia_address — Symfony Route Definitions
+#
+# Registered automatically by PrestaShop 9's module route loader.
+# All routes are under the /admin prefix and protected by the
+# back-office Symfony firewall (ROLE_ADMIN required).
+
+ps_colombia_address_admin:
+  resource: '../src/Controller/Admin/'
+  type: annotation
+
+# Manual route declarations mirror the @Route annotations in the controller.
+# Having them here ensures they are importable even when annotation scanning
+# is not available.
+
+admin_colombia_address_index:
+  path: /admin/colombia-address
+  methods: [GET]
+  defaults:
+    _controller: 'PsColombiaAddress\Controller\Admin\ColombiaAddressController::indexAction'
+
+admin_colombia_address_save:
+  path: /admin/colombia-address/save
+  methods: [POST]
+  defaults:
+    _controller: 'PsColombiaAddress\Controller\Admin\ColombiaAddressController::saveAction'
+
+admin_colombia_address_municipalities:
+  path: /admin/colombia-address/municipalities
+  methods: [GET]
+  defaults:
+    _controller: 'PsColombiaAddress\Controller\Admin\ColombiaAddressController::municipalitiesAction'
+
+admin_colombia_address_import:
+  path: /admin/colombia-address/import
+  methods: [POST]
+  defaults:
+    _controller: 'PsColombiaAddress\Controller\Admin\ColombiaAddressController::importAction'
