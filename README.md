@@ -155,6 +155,18 @@ Checklist sugerido:
 - Revisa que el JS del módulo cargue en checkout (`views/js/checkout.js`).
 - Confirma que el país seleccionado sea Colombia.
 
+### Error en Admin por módulo huérfano (carpeta faltante)
+
+Si Back Office falla con un error similar a `RecursiveDirectoryIterator::__construct(.../modules/ps_colombia_address): Failed to open directory`, significa que el módulo quedó registrado en BD pero no existe su carpeta física.
+
+Recuperación:
+
+1. Restaura la carpeta `modules/ps_colombia_address` en el servidor (aunque sea mínima).
+2. Ejecuta limpieza forzada con el script SQL:
+	- `ps_colombia_address/sql/cleanup_orphan_module_ps_colombia_address.sql`
+3. Limpia caché (`var/cache/prod` y `var/cache/dev`).
+4. Vuelve a subir e instalar el módulo normalmente.
+
 ### No cargan municipios por AJAX
 
 - Revisa que la ruta del controlador front esté accesible.
