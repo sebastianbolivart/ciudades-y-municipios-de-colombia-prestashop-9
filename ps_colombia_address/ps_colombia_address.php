@@ -254,11 +254,12 @@ class Ps_colombia_address extends Module
             return -1;
         }
 
-        $db        = Db::getInstance();
-        $table     = _DB_PREFIX_ . 'colombia_municipality';
+        $db         = Db::getInstance();
+        $table      = 'colombia_municipality';
+        $tableSql   = _DB_PREFIX_ . $table;
 
         // Truncate before a fresh import so the admin "re-import" scenario works.
-        $db->execute('TRUNCATE TABLE `' . bqSQL($table) . '`');
+        $db->execute('TRUNCATE TABLE `' . bqSQL($tableSql) . '`');
 
         $imported = 0;
 
@@ -499,12 +500,13 @@ class Ps_colombia_address extends Module
             return;
         }
 
-        $db    = Db::getInstance();
-        $table = _DB_PREFIX_ . 'colombia_address_extra';
+        $db       = Db::getInstance();
+        $table    = 'colombia_address_extra';
+        $tableSql = _DB_PREFIX_ . $table;
 
         // Upsert: update if exists, insert if not.
         $exists = (int) $db->getValue(
-            'SELECT COUNT(*) FROM `' . bqSQL($table) . '` WHERE `id_address` = ' . $idAddress
+            'SELECT COUNT(*) FROM `' . bqSQL($tableSql) . '` WHERE `id_address` = ' . $idAddress
         );
 
         if ($exists > 0) {
