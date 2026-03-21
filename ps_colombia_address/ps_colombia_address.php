@@ -728,9 +728,13 @@ class Ps_colombia_address extends Module
     private function renderConfigurationForm(): string
     {
         $datasetCount = 0;
+        $departmentCount = 0;
         $service = $this->getAddressService();
         if ($service !== null && method_exists($service, 'getMunicipalityCount')) {
             $datasetCount = (int) $service->getMunicipalityCount();
+        }
+        if ($service !== null && method_exists($service, 'getDepartmentCount')) {
+            $departmentCount = (int) $service->getDepartmentCount();
         }
 
         $fields = [
@@ -740,9 +744,11 @@ class Ps_colombia_address extends Module
                     'icon' => 'icon-cogs',
                 ],
                 'description' => sprintf(
-                    '%s %d',
+                    "%s %d\n%s %d",
                     $this->trans('Municipios cargados en dataset:', [], 'Modules.PsColombiaAddress.Admin'),
-                    $datasetCount
+                    $datasetCount,
+                    $this->trans('Departamentos cargados:', [], 'Modules.PsColombiaAddress.Admin'),
+                    $departmentCount
                 ),
                 'input' => [
                     [

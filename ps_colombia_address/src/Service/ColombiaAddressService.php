@@ -257,6 +257,23 @@ final class ColombiaAddressService
         return (int) $count;
     }
 
+    /**
+     * Return the total number of Colombian departments loaded as states.
+     */
+    public function getDepartmentCount(): int
+    {
+        $stateTable = $this->tableName('state');
+        $countryTable = $this->tableName('country');
+
+        $count = $this->db->getValue(
+            'SELECT COUNT(*) FROM `' . bqSQL($stateTable) . '` s '
+            . 'INNER JOIN `' . bqSQL($countryTable) . '` c ON c.`id_country` = s.`id_country` '
+            . 'WHERE c.`iso_code` = \'CO\''
+        );
+
+        return (int) $count;
+    }
+
     // ─── Private helpers ─────────────────────────────────────────────────────
 
     /**
