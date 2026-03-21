@@ -37,6 +37,7 @@ Componentes clave:
 
 - `ps_colombia_address.php`: ciclo de vida del módulo y hooks.
 - `data/municipios_colombia.csv`: dataset oficial cargado por instalación/importación.
+- `data/departamentos_colombia.csv`: dataset oficial de departamentos (states) de Colombia.
 - `controllers/front/municipalities.php`: endpoint AJAX de municipios.
 - `views/js/checkout.js`: lógica dinámica en formulario de dirección/checkout.
 - `src/Form/ColombiaAddressFormModifier.php`: modificación del formulario de dirección.
@@ -64,6 +65,7 @@ Durante la instalación, el módulo:
 
 - Crea tablas propias.
 - Importa automáticamente el CSV de municipios.
+- Intenta importar automáticamente el CSV de departamentos como estados de Colombia.
 - Registra hooks de formulario y checkout.
 - Crea configuración por defecto.
 
@@ -87,17 +89,27 @@ Después de instalar:
 Desde el mismo formulario de configuración puedes:
 
 - Ver el contador de municipios cargados.
-- Subir un CSV para importar/reemplazar todo el dataset.
+- Subir un CSV para importar/reemplazar todo el dataset de municipios.
+- Subir un CSV para importar/actualizar departamentos (states) de Colombia.
 
-Formato CSV esperado:
+Formato CSV de municipios:
 
 `department,municipality,postal_code,dane_code,latitude,longitude`
+
+Formato CSV de departamentos (states):
+
+`state_name,iso_code`
+
+Ejemplo:
+
+`Cundinamarca,CUN`
 
 Notas de importación:
 
 - Tamaño máximo: **10 MB**.
 - Solo extensión `.csv`.
-- Al importar, el módulo **reemplaza** el dataset actual.
+- Import municipios: **reemplaza** el dataset actual de municipios.
+- Import departamentos: hace **upsert** en tabla `state` (actualiza existentes por `iso_code` y crea faltantes).
 
 ---
 
@@ -160,6 +172,28 @@ Checklist sugerido:
 - Limpia caché de PrestaShop.
 - Revisa que el JS del módulo cargue en checkout (`views/js/checkout.js`).
 - Confirma que el país seleccionado sea Colombia.
+
+### No aparece el selector de Departamento (id_state)
+
+El módulo necesita que Colombia tenga departamentos cargados en la tabla de `state` de PrestaShop.
+
+Opciones para cargar departamentos:
+
+1. Desde `Configurar`, usa el campo **Importar departamentos (states) CSV**.
+2. O ejecuta el script SQL auxiliar:
+
+- `ps_colombia_address/sql/load_colombia_departments_as_states.sql`
+
+Este script:
+
+- Autodetecta el prefijo de tablas.
+- Carga/actualiza los 33 departamentos (incluye Bogotá D.C.) como estados de Colombia.
+- Es idempotente (se puede ejecutar varias veces).
+
+Luego:
+
+1. Limpia caché (`var/cache/prod` y `var/cache/dev`).
+2. Recarga la página de dirección.
 
 ### Error en Admin por módulo huérfano (carpeta faltante)
 

@@ -71,12 +71,16 @@
    * @returns {HTMLSelectElement|null}
    */
   function getMunicipalitySelect() {
-    return (
+    const existing = (
       document.querySelector('[data-colombia-municipality]') ||
       document.querySelector('select[name="colombia_municipality"]') ||
       document.querySelector('select[name="address[colombia_municipality]"]') ||
       null
     );
+
+    if (existing) return existing;
+
+    return ensureMunicipalitySelect();
   }
 
   /**
@@ -113,12 +117,70 @@
    * @returns {HTMLInputElement|null}
    */
   function getDaneCodeField() {
-    return (
+    const existing = (
       document.querySelector('[data-colombia-dane-code]') ||
       document.querySelector('input[name="colombia_dane_code"]') ||
       document.querySelector('input[name="address[colombia_dane_code]"]') ||
       null
     );
+
+    if (existing) return existing;
+
+    return ensureDaneCodeField();
+  }
+
+  /**
+   * Create municipality select dynamically when the form hook did not
+   * inject it (theme/custom form compatibility fallback).
+   *
+   * @returns {HTMLSelectElement|null}
+   */
+  function ensureMunicipalitySelect() {
+    const cityField = getCityField();
+    if (!cityField || !cityField.parentNode) return null;
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'form-group colombia-municipality-group';
+
+    const label = document.createElement('label');
+    label.textContent = 'Municipio';
+    label.setAttribute('for', 'colombia_municipality');
+
+    const select = document.createElement('select');
+    select.id = 'colombia_municipality';
+    select.name = 'colombia_municipality';
+    select.className = 'form-control colombia-municipality-select';
+    select.setAttribute('data-colombia-municipality', '1');
+    select.setAttribute('data-autofill-postal', CONFIG.autofillPostal ? '1' : '0');
+    select.appendChild(createOption('', '— Seleccione un municipio —'));
+
+    wrapper.appendChild(label);
+    wrapper.appendChild(select);
+
+    // Insert the municipality selector right before city field container.
+    const cityContainer = cityField.closest('.form-group') || cityField.parentNode;
+    cityContainer.parentNode.insertBefore(wrapper, cityContainer);
+
+    return select;
+  }
+
+  /**
+   * Create hidden DANE code field when missing.
+   *
+   * @returns {HTMLInputElement|null}
+   */
+  function ensureDaneCodeField() {
+    const cityField = getCityField();
+    if (!cityField || !cityField.form) return null;
+
+    const hidden = document.createElement('input');
+    hidden.type = 'hidden';
+    hidden.name = 'colombia_dane_code';
+    hidden.setAttribute('data-colombia-dane-code', '1');
+
+    cityField.form.appendChild(hidden);
+
+    return hidden;
   }
 
   // ── Utilities ──────────────────────────────────────────────────────────

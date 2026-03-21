@@ -93,6 +93,17 @@ class Ps_colombia_address extends Module
             return false;
         }
 
+        $statesImported = $this->importColombiaStatesCsv(dirname(__FILE__) . '/data/departamentos_colombia.csv');
+        if ($statesImported < 0) {
+            PrestaShopLogger::addLog(
+                '[ps_colombia_address] Could not import Colombia states CSV during install.',
+                2,
+                null,
+                'Module',
+                (int) $this->id
+            );
+        }
+
         if (!$this->registerRequiredHooks()) {
             $this->_errors[] = 'Could not register module hooks.';
             return false;
@@ -311,6 +322,107 @@ class Ps_colombia_address extends Module
     }
 
     /**
+     * Import/Upsert Colombia departments into PrestaShop state table.
+     *
+     * Expected CSV format:
+     *   state_name,iso_code
+     *
+     * Returns number of upserted rows, or -1 on fatal error.
+     */
+    public function importColombiaStatesCsv(string $csvPath): int
+    {
+        if (!is_readable($csvPath)) {
+            return -1;
+        }
+
+        if (filesize($csvPath) > self::MAX_CSV_IMPORT_BYTES) {
+            return -1;
+        }
+
+        $db = Db::getInstance();
+        $countryTable = _DB_PREFIX_ . 'country';
+        $stateTable = _DB_PREFIX_ . 'state';
+
+        $country = $db->getRow(
+            'SELECT `id_country`, `id_zone` FROM `' . bqSQL($countryTable) . '` WHERE `iso_code` = \'CO\' LIMIT 1'
+        );
+
+        if (!is_array($country) || empty($country['id_country'])) {
+            return -1;
+        }
+
+        $idCountry = (int) $country['id_country'];
+        $idZone = (int) ($country['id_zone'] ?? 0);
+
+        $handle = fopen($csvPath, 'r');
+        if ($handle === false) {
+            return -1;
+        }
+
+        $header = fgetcsv($handle);
+        if (!is_array($header) || count($header) < 2) {
+            fclose($handle);
+            return -1;
+        }
+
+        $upserted = 0;
+
+        while (($row = fgetcsv($handle)) !== false) {
+            if (count($row) < 2) {
+                continue;
+            }
+
+            [$stateNameRaw, $isoRaw] = $row;
+
+            $stateName = trim((string) $stateNameRaw);
+            $isoCode = Tools::strtoupper(trim((string) $isoRaw));
+
+            if ($stateName === '' || $isoCode === '') {
+                continue;
+            }
+
+            $stateName = substr($stateName, 0, 120);
+            $isoCode = preg_replace('/[^A-Z0-9]/', '', $isoCode);
+            $isoCode = substr((string) $isoCode, 0, 7);
+
+            if ($isoCode === '') {
+                continue;
+            }
+
+            $existingId = (int) $db->getValue(
+                'SELECT `id_state` FROM `' . bqSQL($stateTable) . '`'
+                . ' WHERE `id_country` = ' . $idCountry
+                . ' AND `iso_code` = \'' . pSQL($isoCode) . '\''
+                . ' LIMIT 1'
+            );
+
+            if ($existingId > 0) {
+                $ok = $db->update('state', [
+                    'id_zone' => $idZone,
+                    'name' => pSQL($stateName),
+                    'active' => 1,
+                ], '`id_state` = ' . $existingId);
+            } else {
+                $ok = $db->insert('state', [
+                    'id_country' => $idCountry,
+                    'id_zone' => $idZone,
+                    'name' => pSQL($stateName),
+                    'iso_code' => pSQL($isoCode),
+                    'active' => 1,
+                ]);
+            }
+
+            if ($ok) {
+                ++$upserted;
+            }
+        }
+
+        fclose($handle);
+
+        return $upserted;
+    }
+
+    /**
      * Back-office module configuration page.
      * Uses the standard module HelperForm pattern for maximum compatibility.
      */
@@ -487,17 +599,18 @@ class Ps_colombia_address extends Module
         Configuration::updateValue(self::CONFIG_ENABLE_AUTOCOMPLETE, (int) Tools::getValue(self::CONFIG_ENABLE_AUTOCOMPLETE, 0));
         Configuration::updateValue(self::CONFIG_LOGISTICS_MODE, (int) Tools::getValue(self::CONFIG_LOGISTICS_MODE, 0));
 
-        $importMessage = $this->processCsvUpload();
+        $importMessage = $this->processMunicipalitiesCsvUpload();
+        $statesImportMessage = $this->processStatesCsvUpload();
 
         return $this->displayConfirmation(
             $this->trans('Configuracion guardada correctamente.', [], 'Modules.PsColombiaAddress.Admin')
-        ) . $importMessage;
+        ) . $importMessage . $statesImportMessage;
     }
 
     /**
      * Import municipalities from an uploaded CSV file if present.
      */
-    private function processCsvUpload(): string
+    private function processMunicipalitiesCsvUpload(): string
     {
         if (!isset($_FILES['PS_COLOMBIA_ADDRESS_CSV_FILE'])) {
             return '';
@@ -547,6 +660,64 @@ class Ps_colombia_address extends Module
         return $this->displayConfirmation(
             sprintf(
                 $this->trans('Dataset importado correctamente (%d municipios).', [], 'Modules.PsColombiaAddress.Admin'),
+                $imported
+            )
+        );
+    }
+
+    /**
+     * Import Colombia states from uploaded CSV if present.
+     */
+    private function processStatesCsvUpload(): string
+    {
+        if (!isset($_FILES['PS_COLOMBIA_ADDRESS_STATES_CSV_FILE'])) {
+            return '';
+        }
+
+        $file = $_FILES['PS_COLOMBIA_ADDRESS_STATES_CSV_FILE'];
+
+        if (!is_array($file) || (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+            return '';
+        }
+
+        if ((int) ($file['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
+            return $this->displayError(
+                $this->trans('No se subió ningún archivo válido.', [], 'Modules.PsColombiaAddress.Admin')
+            );
+        }
+
+        $fileSize = (int) ($file['size'] ?? 0);
+        if ($fileSize <= 0 || $fileSize > self::MAX_CSV_IMPORT_BYTES) {
+            return $this->displayError(
+                $this->trans('El archivo supera el tamaño máximo permitido (10 MB).', [], 'Modules.PsColombiaAddress.Admin')
+            );
+        }
+
+        $originalName = (string) ($file['name'] ?? '');
+        $extension = Tools::strtolower((string) pathinfo($originalName, PATHINFO_EXTENSION));
+        if ($extension !== 'csv') {
+            return $this->displayError(
+                $this->trans('Solo se permiten archivos CSV.', [], 'Modules.PsColombiaAddress.Admin')
+            );
+        }
+
+        $tmpPath = (string) ($file['tmp_name'] ?? '');
+        if ($tmpPath === '' || !is_uploaded_file($tmpPath)) {
+            return $this->displayError(
+                $this->trans('No se subió ningún archivo válido.', [], 'Modules.PsColombiaAddress.Admin')
+            );
+        }
+
+        $imported = $this->importColombiaStatesCsv($tmpPath);
+        if ($imported < 0) {
+            return $this->displayError(
+                $this->trans('Importación fallida de departamentos: estructura CSV inválida.', [], 'Modules.PsColombiaAddress.Admin')
+            );
+        }
+
+        return $this->displayConfirmation(
+            sprintf(
+                $this->trans('Departamentos importados correctamente (%d estados).', [], 'Modules.PsColombiaAddress.Admin'),
                 $imported
             )
         );
@@ -631,6 +802,16 @@ class Ps_colombia_address extends Module
                         'name' => 'PS_COLOMBIA_ADDRESS_CSV_FILE',
                         'desc' => $this->trans(
                             'Sube un CSV con columnas: department, municipality, postal_code, dane_code, latitude, longitude. Si lo subes, reemplaza todo el dataset actual.',
+                            [],
+                            'Modules.PsColombiaAddress.Admin'
+                        ),
+                    ],
+                    [
+                        'type' => 'file',
+                        'label' => $this->trans('Importar departamentos (states) CSV', [], 'Modules.PsColombiaAddress.Admin'),
+                        'name' => 'PS_COLOMBIA_ADDRESS_STATES_CSV_FILE',
+                        'desc' => $this->trans(
+                            'Sube un CSV con columnas: state_name,iso_code. Actualiza/crea departamentos de Colombia en la tabla de estados de PrestaShop.',
                             [],
                             'Modules.PsColombiaAddress.Admin'
                         ),
