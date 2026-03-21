@@ -637,13 +637,16 @@
     setColombiaUiVisible(true);
 
     const deptSelect = ensureDepartmentSelect();
-    loadDepartments();
 
     if (!deptSelect) return;
 
-    // Avoid double-binding.
+    // Avoid double-binding AND prevent infinite loop caused by MutationObserver:
+    // loadDepartments() modifies the DOM (options), which would re-trigger the
+    // observer → init() → loadDepartments() → observer → ... freeze.
     if (deptSelect.dataset.colombiaInit === '1') return;
     deptSelect.dataset.colombiaInit = '1';
+
+    loadDepartments();
 
     deptSelect.addEventListener('change', onDepartmentChange);
 
@@ -697,8 +700,10 @@
 
   const formHost = document.querySelector('.js-address-form') || document.body;
   if (formHost && typeof MutationObserver !== 'undefined') {
+    let mutationDebounceTimer = null;
     const observer = new MutationObserver(function () {
-      init();
+      clearTimeout(mutationDebounceTimer);
+      mutationDebounceTimer = setTimeout(init, 150);
     });
     observer.observe(formHost, { childList: true, subtree: true });
   }
