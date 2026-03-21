@@ -582,6 +582,12 @@
     const municipalitySelect = getMunicipalitySelect();
     if (!municipalitySelect) return;
 
+    // When municipality is rendered directly as the city-bound select,
+    // keep a single control (select) to avoid duplicate UI.
+    if (municipalitySelect.hasAttribute('data-colombia-city-select')) {
+      return;
+    }
+
     // Replace the <select> with a text <input> + a hidden backing field.
     const textInput = document.createElement('input');
     textInput.type        = 'text';
@@ -704,7 +710,7 @@
       municipalitySelect.addEventListener('change', onMunicipalityChange);
     }
 
-    if (CONFIG.enableAutocomplete) {
+    if (CONFIG.enableAutocomplete && !getCityMunicipalitySelect()) {
       initAutocomplete();
     }
 
