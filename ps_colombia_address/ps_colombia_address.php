@@ -313,25 +313,18 @@ class Ps_colombia_address extends Module
     }
 
     /**
-     * Back-office module configuration page — redirect to the Symfony route.
+     * Back-office module configuration page — display config form via legacy controller.
      */
     public function getContent(): string
     {
-        try {
-            /** @var \Symfony\Component\Routing\Router $router */
-            $router = $this->get('router');
-            Tools::redirectAdmin($router->generate('admin_colombia_address_index'));
-        } catch (\Exception $e) {
-            PrestaShopLogger::addLog(
-                sprintf('[ps_colombia_address] getContent router error: %s', $e->getMessage()),
-                3,
-                null,
-                'Module',
-                (int) $this->id
-            );
+        if (!class_exists('AdminColombiaAddressController')) {
+            require_once dirname(__FILE__) . '/controllers/admin/AdminColombiaAddress.php';
         }
 
-        return '';
+        $controller = new AdminColombiaAddressController();
+        $controller->setMedia();
+
+        return $controller->renderPage() ?? '';
     }
 
     // ─── Private helpers ──────────────────────────────────────────────────────
@@ -434,7 +427,6 @@ class Ps_colombia_address extends Module
         $tab             = new Tab();
         $tab->active     = 1;
         $tab->class_name = 'AdminColombiaAddress';
-        $tab->route_name = 'admin_colombia_address_index';
         $tab->id_parent  = (int) Tab::getIdFromClassName('AdminCatalog');
         $tab->module     = $this->name;
 
