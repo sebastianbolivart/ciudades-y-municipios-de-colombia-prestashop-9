@@ -487,8 +487,68 @@ class Ps_colombia_address extends Module
         Configuration::updateValue(self::CONFIG_ENABLE_AUTOCOMPLETE, (int) Tools::getValue(self::CONFIG_ENABLE_AUTOCOMPLETE, 0));
         Configuration::updateValue(self::CONFIG_LOGISTICS_MODE, (int) Tools::getValue(self::CONFIG_LOGISTICS_MODE, 0));
 
+        $importMessage = $this->processCsvUpload();
+
         return $this->displayConfirmation(
             $this->trans('Configuracion guardada correctamente.', [], 'Modules.PsColombiaAddress.Admin')
+        ) . $importMessage;
+    }
+
+    /**
+     * Import municipalities from an uploaded CSV file if present.
+     */
+    private function processCsvUpload(): string
+    {
+        if (!isset($_FILES['PS_COLOMBIA_ADDRESS_CSV_FILE'])) {
+            return '';
+        }
+
+        $file = $_FILES['PS_COLOMBIA_ADDRESS_CSV_FILE'];
+
+        if (!is_array($file) || (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+            return '';
+        }
+
+        if ((int) ($file['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
+            return $this->displayError(
+                $this->trans('No se subió ningún archivo válido.', [], 'Modules.PsColombiaAddress.Admin')
+            );
+        }
+
+        $fileSize = (int) ($file['size'] ?? 0);
+        if ($fileSize <= 0 || $fileSize > self::MAX_CSV_IMPORT_BYTES) {
+            return $this->displayError(
+                $this->trans('El archivo supera el tamaño máximo permitido (10 MB).', [], 'Modules.PsColombiaAddress.Admin')
+            );
+        }
+
+        $originalName = (string) ($file['name'] ?? '');
+        $extension = Tools::strtolower((string) pathinfo($originalName, PATHINFO_EXTENSION));
+        if ($extension !== 'csv') {
+            return $this->displayError(
+                $this->trans('Solo se permiten archivos CSV.', [], 'Modules.PsColombiaAddress.Admin')
+            );
+        }
+
+        $tmpPath = (string) ($file['tmp_name'] ?? '');
+        if ($tmpPath === '' || !is_uploaded_file($tmpPath)) {
+            return $this->displayError(
+                $this->trans('No se subió ningún archivo válido.', [], 'Modules.PsColombiaAddress.Admin')
+            );
+        }
+
+        $imported = $this->importMunicipalitiesCsv($tmpPath);
+        if ($imported < 0) {
+            return $this->displayError(
+                $this->trans('Importación fallida: estructura CSV inválida.', [], 'Modules.PsColombiaAddress.Admin')
+            );
+        }
+
+        return $this->displayConfirmation(
+            sprintf(
+                $this->trans('Dataset importado correctamente (%d municipios).', [], 'Modules.PsColombiaAddress.Admin'),
+                $imported
+            )
         );
     }
 
@@ -565,6 +625,16 @@ class Ps_colombia_address extends Module
                             ['id' => 'logistics_off', 'value' => 0, 'label' => $this->trans('No', [], 'Admin.Global')],
                         ],
                     ],
+                    [
+                        'type' => 'file',
+                        'label' => $this->trans('Importar dataset CSV', [], 'Modules.PsColombiaAddress.Admin'),
+                        'name' => 'PS_COLOMBIA_ADDRESS_CSV_FILE',
+                        'desc' => $this->trans(
+                            'Sube un CSV con columnas: department, municipality, postal_code, dane_code, latitude, longitude. Si lo subes, reemplaza todo el dataset actual.',
+                            [],
+                            'Modules.PsColombiaAddress.Admin'
+                        ),
+                    ],
                 ],
                 'submit' => [
                     'title' => $this->trans('Guardar', [], 'Admin.Actions'),
@@ -583,6 +653,7 @@ class Ps_colombia_address extends Module
         $helper->submit_action = 'submitPsColombiaAddressConfig';
         $helper->currentIndex = AdminController::$currentIndex . '&configure=' . $this->name;
         $helper->token = Tools::getAdminTokenLite('AdminModules');
+        $helper->name_controller = $this->name;
         $helper->fields_value = [
             self::CONFIG_ENABLE => (int) Configuration::get(self::CONFIG_ENABLE),
             self::CONFIG_AUTOFILL_POSTAL => (int) Configuration::get(self::CONFIG_AUTOFILL_POSTAL),
