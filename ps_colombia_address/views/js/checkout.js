@@ -191,6 +191,18 @@
     };
   }
 
+  function getHydrationKey(colombia, departmentSelection, cityValue) {
+    if (!colombia) {
+      return 'country:other';
+    }
+
+    const departmentId = departmentSelection && departmentSelection.id ? String(departmentSelection.id) : '';
+    const departmentName = departmentSelection && departmentSelection.name ? String(departmentSelection.name) : '';
+    const city = cityValue ? String(cityValue) : '';
+
+    return ['country:co', departmentId, departmentName, city].join('|');
+  }
+
   function isColombiaSelected() {
     const countrySelect = getCountrySelect();
     if (!countrySelect) return false;
@@ -740,6 +752,8 @@
 
     if (!deptSelect) return;
 
+    const hydrationKey = getHydrationKey(colombia, preselectedDepartment, preselectedCity);
+
     const runInitialHydration = function () {
       if (preselectedDepartment && (preselectedDepartment.id || preselectedDepartment.name)) {
         loadDepartments(preselectedDepartment, preselectedCity);
@@ -773,10 +787,15 @@
     // loadDepartments() modifies the DOM (options), which would re-trigger the
     // observer → init() → loadDepartments() → observer → ... freeze.
     if (deptSelect.dataset.colombiaInit === '1') {
+      if (deptSelect.dataset.colombiaHydrationKey === hydrationKey) {
+        return;
+      }
+      deptSelect.dataset.colombiaHydrationKey = hydrationKey;
       runInitialHydration();
       return;
     }
     deptSelect.dataset.colombiaInit = '1';
+    deptSelect.dataset.colombiaHydrationKey = hydrationKey;
 
     runInitialHydration();
 
@@ -785,10 +804,14 @@
     if (countrySelect && countrySelect.dataset.colombiaInit !== '1') {
       countrySelect.dataset.colombiaInit = '1';
       countrySelect.addEventListener('change', function () {
+        const departmentSelect = getDepartmentSelect();
+        if (departmentSelect && departmentSelect.dataset) {
+          delete departmentSelect.dataset.colombiaHydrationKey;
+        }
+
         if (isColombiaSelected()) {
           setNativeDepartmentVisible(true);
           setColombiaUiVisible(true);
-          loadDepartments(getInitialDepartmentSelection(), (getCityField() || {}).value || '');
           init();
         } else {
           setNativeDepartmentVisible(true);
