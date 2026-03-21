@@ -9,7 +9,7 @@
 -- hook bindings, configuration, or module tables behind.
 -- ============================================================
 
-START TRANSACTION;
+SET @db_name := DATABASE();
 
 -- 1) Capture possible legacy tab ids in user variables
 SET @ps_colombia_tab_id := (
@@ -56,8 +56,19 @@ WHERE name IN (
    OR name LIKE 'COLOMBIA_ADDRESS_%';
 
 -- 8) Remove authorization roles created around the old admin tab, if any
-DELETE FROM `7qmfe_authorization_role`
-WHERE slug LIKE 'ROLE_MOD_TAB_ADMINCOLOMBIAADDRESS%';
+--    (run only if table exists to avoid script interruption)
+SET @has_authorization_role := (
+    SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+    WHERE TABLE_SCHEMA = @db_name AND TABLE_NAME = '7qmfe_authorization_role'
+);
+SET @sql_authorization_role := IF(
+    @has_authorization_role > 0,
+    'DELETE FROM `7qmfe_authorization_role` WHERE slug LIKE ''ROLE_MOD_TAB_ADMINCOLOMBIAADDRESS%''',
+    'SELECT 1'
+);
+PREPARE stmt_authorization_role FROM @sql_authorization_role;
+EXECUTE stmt_authorization_role;
+DEALLOCATE PREPARE stmt_authorization_role;
 
 -- 9) Remove module row itself
 DELETE FROM `7qmfe_module`
@@ -67,7 +78,8 @@ WHERE name = 'ps_colombia_address';
 DROP TABLE IF EXISTS `7qmfe_colombia_address_extra`;
 DROP TABLE IF EXISTS `7qmfe_colombia_municipality`;
 
-COMMIT;
+-- No explicit transaction wrapper: safer on shared hosts when optional
+-- statements may be unsupported in specific PrestaShop versions.
 
 -- ============================================================
 -- Verification queries
