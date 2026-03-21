@@ -87,6 +87,11 @@ class Ps_colombia_address extends Module
             return false;
         }
 
+        if (!$this->ensureAddressExtraForeignKey()) {
+            $this->_errors[] = 'Could not ensure foreign key integrity for address extras.';
+            return false;
+        }
+
         if (!$this->importMunicipalitiesCsv(dirname(__FILE__) . '/data/municipios_colombia.csv')) {
             $this->_errors[] = 'Could not import municipalities dataset.';
             return false;
@@ -387,11 +392,13 @@ class Ps_colombia_address extends Module
                 continue;
             }
 
-            $existingId = (int) $db->getValue(
-                'SELECT `id_state` FROM `' . bqSQL($stateTable) . '`'
-                . ' WHERE `id_country` = ' . $idCountry
-                . ' AND `iso_code` = \'' . pSQL($isoCode) . '\''
-            );
+            $query = new DbQuery();
+            $query->select('`id_state`');
+            $query->from('state');
+            $query->where('`id_country` = ' . (int) $idCountry);
+            $query->where('`iso_code` = ' . $this->quoteSqlString($isoCode));
+
+            $existingId = (int) $db->getValue((string) $query);
 
             if ($existingId > 0) {
                 $ok = $db->update('state', [
@@ -426,6 +433,9 @@ class Ps_colombia_address extends Module
     public function getContent(): string
     {
         $output = '';
+
+        // Self-heal for upgrades from older versions without FK in address_extra.
+        $this->ensureAddressExtraForeignKey();
 
         if (Tools::isSubmit('submitPsColombiaAddressDeleteMunicipalities')) {
             $output .= $this->processDeleteMunicipalitiesAction();
@@ -1123,14 +1133,14 @@ class Ps_colombia_address extends Module
             }
 
             $sql = 'SELECT 1 FROM INFORMATION_SCHEMA.TABLES'
-                 . ' WHERE TABLE_SCHEMA = \'' . pSQL($dbName) . '\''
-                 . ' AND TABLE_NAME = \'' . pSQL($tableName) . '\'';
+                 . ' WHERE TABLE_SCHEMA = ' . $this->quoteSqlString($dbName)
+                 . ' AND TABLE_NAME = ' . $this->quoteSqlString($tableName);
 
             $rows = $db->executeS($sql);
             return is_array($rows) && !empty($rows);
         } catch (\Exception $e) {
             try {
-                $sql = 'SHOW TABLES LIKE \'' . pSQL($tableName) . '\'';
+                $sql = 'SHOW TABLES LIKE ' . $this->quoteSqlString($tableName);
                 $rows = $db->executeS($sql);
                 return is_array($rows) && !empty($rows);
             } catch (\Exception $ex) {
@@ -1190,7 +1200,68 @@ class Ps_colombia_address extends Module
             return number_format($value, 10, '.', '');
         }
 
-        // String (default) - PrestaShop pSQL() works for both MySQL and MariaDB
-        return pSQL((string) $value);
+        // String (default)
+        return $this->quoteSqlString((string) $value);
+    }
+
+    private function quoteSqlString(string $value): string
+    {
+        return '\'' . pSQL($value, true) . '\'';
+    }
+
+    private function ensureAddressExtraForeignKey(): bool
+    {
+        $db = Db::getInstance();
+
+        $extraTable = $this->resolveSqlTableName($db, 'colombia_address_extra');
+        $addressTable = $this->resolveSqlTableName($db, 'address');
+
+        if (!$this->tableExists($db, $extraTable) || !$this->tableExists($db, $addressTable)) {
+            return false;
+        }
+
+        // Cleanup orphan rows before creating FK.
+        $cleanupSql = 'DELETE e FROM `' . bqSQL($extraTable) . '` e '
+            . 'LEFT JOIN `' . bqSQL($addressTable) . '` a ON a.`id_address` = e.`id_address` '
+            . 'WHERE a.`id_address` IS NULL';
+
+        if ($db->execute($cleanupSql) === false) {
+            return false;
+        }
+
+        if ($this->hasAddressExtraForeignKey($db, $extraTable, $addressTable)) {
+            return true;
+        }
+
+        $constraintName = 'fk_colombia_address_extra_address';
+        $addFkSql = 'ALTER TABLE `' . bqSQL($extraTable) . '` '
+            . 'ADD CONSTRAINT `' . bqSQL($constraintName) . '` '
+            . 'FOREIGN KEY (`id_address`) REFERENCES `' . bqSQL($addressTable) . '` (`id_address`) '
+            . 'ON DELETE CASCADE ON UPDATE CASCADE';
+
+        return $db->execute($addFkSql) !== false;
+    }
+
+    private function hasAddressExtraForeignKey(Db $db, string $extraTable, string $addressTable): bool
+    {
+        try {
+            $dbName = (string) $db->getValue('SELECT DATABASE()');
+            if ($dbName === '') {
+                return false;
+            }
+
+            $sql = 'SELECT 1 FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE '
+                . 'WHERE TABLE_SCHEMA = ' . $this->quoteSqlString($dbName)
+                . ' AND TABLE_NAME = ' . $this->quoteSqlString($extraTable)
+                . ' AND COLUMN_NAME = ' . $this->quoteSqlString('id_address')
+                . ' AND REFERENCED_TABLE_NAME = ' . $this->quoteSqlString($addressTable)
+                . ' LIMIT 1';
+
+            $rows = $db->executeS($sql);
+
+            return is_array($rows) && !empty($rows);
+        } catch (\Exception $e) {
+            return false;
+        }
     }
 }

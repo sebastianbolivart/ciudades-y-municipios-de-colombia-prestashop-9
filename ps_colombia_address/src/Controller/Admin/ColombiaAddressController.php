@@ -26,17 +26,14 @@ declare(strict_types=1);
 namespace PsColombiaAddress\Controller\Admin;
 
 use Configuration;
-use PrestaShop\PrestaShop\Core\Security\Permission;
 use PrestaShopBundle\Controller\Admin\FrameworkBundleAdminController;
 use PsColombiaAddress\Service\ColombiaAddressService;
 use Symfony\Component\HttpFoundation\File\Exception\FileException;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
-use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
-use Symfony\Component\Security\Csrf\CsrfToken;
 
 /**
  * FrameworkBundleAdminController already wires:
@@ -46,6 +43,9 @@ use Symfony\Component\Security\Csrf\CsrfToken;
  */
 class ColombiaAddressController extends FrameworkBundleAdminController
 {
+    private const CSRF_TOKEN_CONFIG = 'colombia_address_config';
+    private const CSRF_TOKEN_IMPORT = 'colombia_address_import';
+
     /** Max allowed CSV upload size (10 MB). */
     private const MAX_UPLOAD_BYTES = 10_485_760;
 
@@ -87,9 +87,12 @@ class ColombiaAddressController extends FrameworkBundleAdminController
      */
     public function saveAction(Request $request): RedirectResponse
     {
+        $this->denyAccessUnlessGranted(['read', 'update'], $this->configuration);
+
         // CSRF validation
-        $submittedToken = $request->request->get('_token', '');
-        if (!$this->isCsrfTokenValid('colombia_address_config', $submittedToken)) {
+        $submittedToken = $request->request->get('_token');
+        $submittedToken = is_string($submittedToken) ? $submittedToken : '';
+        if (!parent::isCsrfTokenValid(self::CSRF_TOKEN_CONFIG, $submittedToken)) {
             $this->addFlash('error', $this->trans('Invalid security token.', 'Modules.PsColombiaAddress.Admin'));
             return $this->redirectToRoute('admin_colombia_address_index');
         }
@@ -162,9 +165,12 @@ class ColombiaAddressController extends FrameworkBundleAdminController
      */
     public function importAction(Request $request): RedirectResponse
     {
+        $this->denyAccessUnlessGranted(['read', 'create'], $this->configuration);
+
         // CSRF protection
-        $submittedToken = $request->request->get('_token', '');
-        if (!$this->isCsrfTokenValid('colombia_address_import', $submittedToken)) {
+        $submittedToken = $request->request->get('_token');
+        $submittedToken = is_string($submittedToken) ? $submittedToken : '';
+        if (!parent::isCsrfTokenValid(self::CSRF_TOKEN_IMPORT, $submittedToken)) {
             $this->addFlash('error', $this->trans('Invalid security token.', 'Modules.PsColombiaAddress.Admin'));
             return $this->redirectToRoute('admin_colombia_address_municipalities');
         }
@@ -226,16 +232,5 @@ class ColombiaAddressController extends FrameworkBundleAdminController
         }
 
         return $this->redirectToRoute('admin_colombia_address_municipalities');
-    }
-
-    // ─── Private helpers ─────────────────────────────────────────────────────
-
-    /**
-     * Lightweight CSRF check using Symfony's CsrfTokenManager.
-     */
-    private function isCsrfTokenValid(string $id, string $token): bool
-    {
-        return $this->get('security.csrf.token_manager')
-            ->isTokenValid(new CsrfToken($id, $token));
     }
 }

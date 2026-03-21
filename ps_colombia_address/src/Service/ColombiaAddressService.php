@@ -68,14 +68,13 @@ final class ColombiaAddressService
             }
         }
 
-        $table = $this->tableName('colombia_municipality');
+            $query = new \DbQuery();
+            $query->select('`municipality`, `postal_code`, `dane_code`, `latitude`, `longitude`');
+            $query->from('colombia_municipality');
+            $query->where('`department` = ' . $this->quoteSqlString($department));
+            $query->orderBy('`municipality` ASC');
 
-        $rows = $this->db->executeS(
-            'SELECT `municipality`, `postal_code`, `dane_code`, `latitude`, `longitude`
-               FROM `' . bqSQL($table) . '`
-              WHERE `department` = \'' . pSQL($department) . '\'
-           ORDER BY `municipality` ASC'
-        );
+            $rows = $this->db->executeS((string) $query);
 
         $result = [];
         if (is_array($rows)) {
@@ -111,12 +110,12 @@ final class ColombiaAddressService
             return '';
         }
 
-        $table = $this->tableName('colombia_municipality');
+        $query = new \DbQuery();
+        $query->select('`postal_code`');
+        $query->from('colombia_municipality');
+        $query->where('`municipality` = ' . $this->quoteSqlString($municipality));
 
-        $value = $this->db->getValue(
-            'SELECT `postal_code` FROM `' . bqSQL($table) . '`
-              WHERE `municipality` = \'' . pSQL($municipality) . '\''
-        );
+        $value = $this->db->getValue((string) $query);
 
         return is_string($value) ? $value : '';
     }
@@ -135,12 +134,12 @@ final class ColombiaAddressService
             return '';
         }
 
-        $table = $this->tableName('colombia_municipality');
+        $query = new \DbQuery();
+        $query->select('`dane_code`');
+        $query->from('colombia_municipality');
+        $query->where('`municipality` = ' . $this->quoteSqlString($municipality));
 
-        $value = $this->db->getValue(
-            'SELECT `dane_code` FROM `' . bqSQL($table) . '`
-              WHERE `municipality` = \'' . pSQL($municipality) . '\''
-        );
+        $value = $this->db->getValue((string) $query);
 
         return is_string($value) ? $value : '';
     }
@@ -159,12 +158,12 @@ final class ColombiaAddressService
             return ['latitude' => '', 'longitude' => ''];
         }
 
-        $table = $this->tableName('colombia_municipality');
+        $query = new \DbQuery();
+        $query->select('`latitude`, `longitude`');
+        $query->from('colombia_municipality');
+        $query->where('`municipality` = ' . $this->quoteSqlString($municipality));
 
-        $row = $this->db->getRow(
-            'SELECT `latitude`, `longitude` FROM `' . bqSQL($table) . '`
-              WHERE `municipality` = \'' . pSQL($municipality) . '\''
-        );
+        $row = $this->db->getRow((string) $query);
 
         if (!is_array($row)) {
             return ['latitude' => '', 'longitude' => ''];
@@ -299,5 +298,10 @@ final class ColombiaAddressService
     private function tableName(string $base): string
     {
         return $this->tablePrefix . $base;
+    }
+
+    private function quoteSqlString(string $value): string
+    {
+        return '\'' . pSQL($value, true) . '\'';
     }
 }

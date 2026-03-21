@@ -106,13 +106,14 @@ class Ps_colombia_addressMunicipalitiesModuleFrontController extends ModuleFront
             }
 
             try {
-                $row = Db::getInstance()->getRow(
-                    'SELECT m.`department`, m.`municipality`, m.`postal_code`, m.`dane_code`, m.`latitude`, m.`longitude`, s.`id_state`
-                       FROM `' . bqSQL(_DB_PREFIX_ . 'colombia_municipality') . '` m
-                       LEFT JOIN `' . bqSQL(_DB_PREFIX_ . 'state') . '` s ON s.`name` = m.`department`
-                       LEFT JOIN `' . bqSQL(_DB_PREFIX_ . 'country') . '` c ON c.`id_country` = s.`id_country` AND c.`iso_code` = \'CO\'
-                      WHERE `municipality` = \'' . pSQL($municipality) . '\''
-                );
+                $query = new DbQuery();
+                $query->select('m.`department`, m.`municipality`, m.`postal_code`, m.`dane_code`, m.`latitude`, m.`longitude`, s.`id_state`');
+                $query->from('colombia_municipality', 'm');
+                $query->leftJoin('state', 's', 's.`name` = m.`department`');
+                $query->leftJoin('country', 'c', 'c.`id_country` = s.`id_country` AND c.`iso_code` = \'CO\'');
+                $query->where('m.`municipality` = ' . $this->quoteSqlString($municipality));
+
+                $row = Db::getInstance()->getRow((string) $query);
             } catch (\Throwable $e) {
                 PrestaShopLogger::addLog(
                     '[ps_colombia_address] AJAX municipality lookup error: ' . $e->getMessage(),
@@ -148,12 +149,13 @@ class Ps_colombia_addressMunicipalitiesModuleFrontController extends ModuleFront
 
         // Fetch municipalities directly via DB (same pattern as departments endpoint).
         try {
-            $rows = Db::getInstance()->executeS(
-                'SELECT `municipality`, `postal_code`, `dane_code`, `latitude`, `longitude`
-                   FROM `' . bqSQL(_DB_PREFIX_ . 'colombia_municipality') . '`
-                  WHERE `department` = \'' . pSQL($department) . '\'
-               ORDER BY `municipality` ASC'
-            );
+            $query = new DbQuery();
+            $query->select('`municipality`, `postal_code`, `dane_code`, `latitude`, `longitude`');
+            $query->from('colombia_municipality');
+            $query->where('`department` = ' . $this->quoteSqlString($department));
+            $query->orderBy('`municipality` ASC');
+
+            $rows = Db::getInstance()->executeS((string) $query);
 
             $municipalities = [];
             if (is_array($rows)) {
@@ -212,6 +214,11 @@ class Ps_colombia_addressMunicipalitiesModuleFrontController extends ModuleFront
         );
 
         return substr((string) $clean, 0, self::MAX_DEPT_LENGTH);
+    }
+
+    private function quoteSqlString(string $value): string
+    {
+        return '\'' . pSQL($value, true) . '\'';
     }
 
     /**

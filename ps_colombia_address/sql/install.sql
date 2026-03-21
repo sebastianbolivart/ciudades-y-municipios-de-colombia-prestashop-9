@@ -33,5 +33,10 @@ CREATE TABLE IF NOT EXISTS `PREFIX_colombia_address_extra` (
     `dane_code`   VARCHAR(10)     NOT NULL DEFAULT '',
     `latitude`    DECIMAL(10, 8)  NOT NULL DEFAULT 0.00000000,
     `longitude`   DECIMAL(11, 8)  NOT NULL DEFAULT 0.00000000,
-    PRIMARY KEY (`id_address`)
+    PRIMARY KEY (`id_address`),
+    CONSTRAINT `fk_colombia_address_extra_address`
+      FOREIGN KEY (`id_address`)
+      REFERENCES `PREFIX_address` (`id_address`)
+      ON DELETE CASCADE
+      ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
