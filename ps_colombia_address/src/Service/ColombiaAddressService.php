@@ -115,8 +115,7 @@ final class ColombiaAddressService
 
         $value = $this->db->getValue(
             'SELECT `postal_code` FROM `' . bqSQL($table) . '`
-              WHERE `municipality` = \'' . pSQL($municipality) . '\'
-              LIMIT 1'
+              WHERE `municipality` = \'' . pSQL($municipality) . '\''
         );
 
         return is_string($value) ? $value : '';
@@ -140,8 +139,7 @@ final class ColombiaAddressService
 
         $value = $this->db->getValue(
             'SELECT `dane_code` FROM `' . bqSQL($table) . '`
-              WHERE `municipality` = \'' . pSQL($municipality) . '\'
-              LIMIT 1'
+              WHERE `municipality` = \'' . pSQL($municipality) . '\''
         );
 
         return is_string($value) ? $value : '';
@@ -165,8 +163,7 @@ final class ColombiaAddressService
 
         $row = $this->db->getRow(
             'SELECT `latitude`, `longitude` FROM `' . bqSQL($table) . '`
-              WHERE `municipality` = \'' . pSQL($municipality) . '\'
-              LIMIT 1'
+              WHERE `municipality` = \'' . pSQL($municipality) . '\''
         );
 
         if (!is_array($row)) {

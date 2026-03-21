@@ -344,7 +344,7 @@ class Ps_colombia_address extends Module
         $stateTable = _DB_PREFIX_ . 'state';
 
         $country = $db->getRow(
-            'SELECT `id_country`, `id_zone` FROM `' . bqSQL($countryTable) . '` WHERE `iso_code` = \'CO\' LIMIT 1'
+            'SELECT `id_country`, `id_zone` FROM `' . bqSQL($countryTable) . '` WHERE `iso_code` = \'CO\''
         );
 
         if (!is_array($country) || empty($country['id_country'])) {
@@ -393,7 +393,6 @@ class Ps_colombia_address extends Module
                 'SELECT `id_state` FROM `' . bqSQL($stateTable) . '`'
                 . ' WHERE `id_country` = ' . $idCountry
                 . ' AND `iso_code` = \'' . pSQL($isoCode) . '\''
-                . ' LIMIT 1'
             );
 
             if ($existingId > 0) {
@@ -961,15 +960,17 @@ class Ps_colombia_address extends Module
                 return false;
             }
 
-            $sql = 'SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES'
+            $sql = 'SELECT 1 FROM INFORMATION_SCHEMA.TABLES'
                  . ' WHERE TABLE_SCHEMA = \'' . pSQL($dbName) . '\''
                  . ' AND TABLE_NAME = \'' . pSQL($tableName) . '\'';
 
-            return (int) $db->getValue($sql) > 0;
+            $rows = $db->executeS($sql);
+            return is_array($rows) && !empty($rows);
         } catch (\Exception $e) {
             try {
                 $sql = 'SHOW TABLES LIKE \'' . pSQL($tableName) . '\'';
-                return (bool) $db->getValue($sql);
+                $rows = $db->executeS($sql);
+                return is_array($rows) && !empty($rows);
             } catch (\Exception $ex) {
                 return false;
             }
