@@ -751,12 +751,19 @@
         return;
       }
 
+      if (!preselectedCity) {
+        loadDepartments({ id: '', name: '' }, '');
+        return;
+      }
+
       if (!shouldHydrateFromSavedCity(preselectedCity)) {
+        loadDepartments({ id: '', name: '' }, '');
         return;
       }
 
       lookupMunicipality(preselectedCity).then(function (data) {
         if (!data || !data.department) {
+          loadDepartments({ id: '', name: '' }, preselectedCity);
           return;
         }
 
