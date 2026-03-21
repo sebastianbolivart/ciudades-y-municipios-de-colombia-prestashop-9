@@ -124,6 +124,30 @@
     return select;
   }
 
+  function getDynamicDepartmentSelect() {
+    return document.querySelector('[data-colombia-department]');
+  }
+
+  function getDynamicDepartmentGroup() {
+    return document.querySelector('.colombia-department-group');
+  }
+
+  function getDynamicMunicipalityGroup() {
+    return document.querySelector('.colombia-municipality-group');
+  }
+
+  function setColombiaUiVisible(visible) {
+    const deptGroup = getDynamicDepartmentGroup();
+    const muniGroup = getDynamicMunicipalityGroup();
+
+    if (deptGroup) {
+      deptGroup.style.display = visible ? '' : 'none';
+    }
+    if (muniGroup) {
+      muniGroup.style.display = visible ? '' : 'none';
+    }
+  }
+
   /**
    * Return the Colombian municipality <select> added by the Symfony form modifier.
    *
@@ -464,6 +488,10 @@
    * @param {Event} event
    */
   function onDepartmentChange(event) {
+    if (!isColombiaSelected()) {
+      return;
+    }
+
     const select  = event.target;
     const selected = select.options[select.selectedIndex];
     const deptName = selected ? (selected.textContent || '').trim() : '';
@@ -570,9 +598,19 @@
    * Safe to call multiple times (e.g. after checkout AJAX refresh).
    */
   function init() {
+    const countrySelect = getCountrySelect();
+    const colombia = isColombiaSelected();
+
+    if (!colombia) {
+      setColombiaUiVisible(false);
+      return;
+    }
+
+    setColombiaUiVisible(true);
+
     let deptSelect = getDepartmentSelect();
 
-    if (!deptSelect && isColombiaSelected()) {
+    if (!deptSelect) {
       deptSelect = ensureDepartmentSelect();
       loadDepartments();
     }
@@ -585,12 +623,15 @@
 
     deptSelect.addEventListener('change', onDepartmentChange);
 
-    const countrySelect = getCountrySelect();
     if (countrySelect && countrySelect.dataset.colombiaInit !== '1') {
       countrySelect.dataset.colombiaInit = '1';
       countrySelect.addEventListener('change', function () {
         if (isColombiaSelected()) {
+          setColombiaUiVisible(true);
           loadDepartments();
+          init();
+        } else {
+          setColombiaUiVisible(false);
         }
       });
     }
@@ -627,6 +668,14 @@
 
   // Also re-init when PrestaShop fires the generic prestashop:* events.
   document.addEventListener('prestashop:payment-updated', init);
+
+  const formHost = document.querySelector('.js-address-form') || document.body;
+  if (formHost && typeof MutationObserver !== 'undefined') {
+    const observer = new MutationObserver(function () {
+      init();
+    });
+    observer.observe(formHost, { childList: true, subtree: true });
+  }
 
   // Expose re-init for third-party modules / themes.
   window.ColombiaAddress = { init: init, loadMunicipalities: loadMunicipalities };
