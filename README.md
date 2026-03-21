@@ -4,7 +4,7 @@ Módulo de producción para PrestaShop 9 que implementa la jerarquía de direcci
 
 **País → Departamento → Municipio → Código Postal**
 
-Incluye un dataset nacional con **1122 municipios**, código DANE y coordenadas geográficas, optimizado para checkout y logística.
+Incluye un dataset nacional con **1111 municipios** (actual), código DANE y coordenadas geográficas, optimizado para checkout y logística.
 
 ---
 
@@ -14,7 +14,8 @@ Incluye un dataset nacional con **1122 municipios**, código DANE y coordenadas 
 - Carga municipios dinámicamente por AJAX en formularios de dirección.
 - Completa automáticamente código postal (opcional).
 - Guarda metadatos de dirección (código DANE y coordenadas) para uso logístico.
-- Provee panel administrativo (Symfony) para configuración e importación de CSV.
+- Provee configuración desde el panel estándar del módulo (`Módulos > Gestor de módulos > Configurar`).
+- Permite importar/reemplazar el dataset desde CSV directamente en la configuración del módulo.
 - No modifica archivos core de PrestaShop (solo hooks, controladores y servicios del módulo).
 
 ---
@@ -38,9 +39,9 @@ Componentes clave:
 - `data/municipios_colombia.csv`: dataset oficial cargado por instalación/importación.
 - `controllers/front/municipalities.php`: endpoint AJAX de municipios.
 - `views/js/checkout.js`: lógica dinámica en formulario de dirección/checkout.
-- `src/Controller/Admin/ColombiaAddressController.php`: configuración en Back Office.
 - `src/Form/ColombiaAddressFormModifier.php`: modificación del formulario de dirección.
 - `sql/install.sql` y `sql/uninstall.sql`: creación/eliminación de tablas del módulo.
+- `sql/cleanup_orphan_module_ps_colombia_address.sql`: limpieza robusta de instalaciones fallidas (autodetecta prefijo).
 
 ---
 
@@ -74,24 +75,29 @@ Después de instalar:
 
 1. Abre el módulo en **Configurar**.
 2. Ajusta opciones principales:
-	 - Habilitar/deshabilitar módulo.
-	 - Habilitar dropdown de municipio.
-	 - Autocompletar código postal.
-	 - Autocomplete (si está activo en frontend).
-	 - Modo logística (si aplica a tu operación).
+   - Habilitar/deshabilitar módulo.
+   - Habilitar dropdown de municipio.
+   - Autocompletar código postal.
+   - Habilitar autocomplete (opcional).
+   - Modo logística (si aplica a tu operación).
 3. Guarda cambios.
 
 ### Gestión de dataset
 
-Desde la vista de municipios puedes:
+Desde el mismo formulario de configuración puedes:
 
-- Filtrar por departamento.
-- Revisar municipios cargados.
-- Importar un CSV actualizado.
+- Ver el contador de municipios cargados.
+- Subir un CSV para importar/reemplazar todo el dataset.
 
 Formato CSV esperado:
 
 `department,municipality,postal_code,dane_code,latitude,longitude`
+
+Notas de importación:
+
+- Tamaño máximo: **10 MB**.
+- Solo extensión `.csv`.
+- Al importar, el módulo **reemplaza** el dataset actual.
 
 ---
 
@@ -139,7 +145,7 @@ No altera la estructura de tablas nativas de PrestaShop.
 Checklist sugerido:
 
 - El módulo aparece como instalado y activo.
-- Se creó el menú/pantalla de configuración.
+- Se puede abrir **Configurar** desde el gestor de módulos.
 - En checkout, al cambiar departamento, se actualiza municipio.
 - Código postal se rellena correctamente (si opción activa).
 - Se pueden crear y editar direcciones sin errores.
@@ -162,10 +168,34 @@ Si Back Office falla con un error similar a `RecursiveDirectoryIterator::__const
 Recuperación:
 
 1. Restaura la carpeta `modules/ps_colombia_address` en el servidor (aunque sea mínima).
-2. Ejecuta limpieza forzada con el script SQL:
+2. Ejecuta limpieza forzada con:
 	- `ps_colombia_address/sql/cleanup_orphan_module_ps_colombia_address.sql`
+	- El script autodetecta prefijo de tablas y es tolerante a diferencias de esquema.
 3. Limpia caché (`var/cache/prod` y `var/cache/dev`).
 4. Vuelve a subir e instalar el módulo normalmente.
+
+### Error `Lock wait timeout exceeded` al activar
+
+Si al activar ves `SQLSTATE[HY000]: 1205 Lock wait timeout exceeded`, normalmente hay bloqueo en tablas de PrestaShop (`module`, `module_shop`, `hook_module`, `configuration`).
+
+Pasos:
+
+1. Ejecuta el cleanup SQL de arriba.
+2. Cierra pestañas/sesiones de phpMyAdmin que dejen transacciones abiertas.
+3. Limpia caché de PrestaShop.
+4. Reintenta activar.
+
+Si persiste, revisa procesos bloqueando en MySQL/MariaDB (`SHOW FULL PROCESSLIST;`) y finaliza la sesión bloqueante.
+
+### Error SQL 1146/1054/1175 durante cleanup
+
+El script actualizado ya contempla:
+
+- Prefijo distinto al esperado (`1146` por tablas inexistentes prefijadas).
+- Columnas que no existen en ciertos esquemas (`1054`).
+- Safe updates en clientes SQL (`1175`).
+
+Solo asegúrate de ejecutar la versión más reciente del script.
 
 ### No cargan municipios por AJAX
 
@@ -186,7 +216,8 @@ Al desinstalar, el módulo:
 
 - Elimina sus tablas propias.
 - Limpia su configuración.
-- Quita su pestaña administrativa.
+
+No crea ni depende de una pestaña administrativa personalizada en la barra lateral.
 
 No elimina ni modifica datos core fuera de su alcance.
 
@@ -194,7 +225,7 @@ No elimina ni modifica datos core fuera de su alcance.
 
 ## 12) Datos incluidos
 
-- Dataset actual incluido: **1122 municipios** de Colombia.
+- Dataset actual incluido: **1111 municipios** de Colombia.
 - Fuente estructurada para operación ecommerce (logística, validación territorial, analítica por DANE).
 
 ---
