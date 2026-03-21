@@ -552,14 +552,15 @@ class Ps_colombia_address extends Module
         $prefixed = _DB_PREFIX_ . $table;
 
         if ($this->tableExists($db, $prefixed)) {
-            return (bool) $db->insert($table, $data, false, true, Db::INSERT, true);
+            return (bool) $db->insert($table, $data);
         }
 
         if ($this->tableExists($db, $table)) {
-            return (bool) $db->insert($table, $data, false, true, Db::INSERT, false);
+            // Table exists without prefix; insert directly without auto-prefixing
+            return (bool) $db->execute('INSERT INTO `' . bqSQL($table) . '` ' . $this->buildInsertSQL($data));
         }
 
-        return (bool) $db->insert($table, $data, false, true, Db::INSERT, true);
+        return (bool) $db->insert($table, $data);
     }
 
     /**
@@ -570,24 +571,52 @@ class Ps_colombia_address extends Module
         $prefixed = _DB_PREFIX_ . $table;
 
         if ($this->tableExists($db, $prefixed)) {
-            return (bool) $db->update($table, $data, $where, 0, false, true, true);
+            return (bool) $db->update($table, $data, $where);
         }
 
         if ($this->tableExists($db, $table)) {
-            return (bool) $db->update($table, $data, $where, 0, false, true, false);
+            // Table exists without prefix; update directly without auto-prefixing
+            return (bool) $db->execute('UPDATE `' . bqSQL($table) . '` SET ' . $this->buildUpdateSQL($data) . ' WHERE ' . $where);
         }
 
-        return (bool) $db->update($table, $data, $where, 0, false, true, true);
+        return (bool) $db->update($table, $data, $where);
     }
 
     /**
-     * Check if a table exists in current database.
+     * Check if a table exists in current database using INFORMATION_SCHEMA.
+     * More reliable than SHOW TABLES in MariaDB contexts.
      */
     private function tableExists(Db $db, string $tableName): bool
     {
-        $escaped = pSQL($tableName);
-        $sql = "SHOW TABLES LIKE '" . $escaped . "'";
+        $dbName = (string) $db->getValue('SELECT DATABASE()');
+        $sql = 'SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES'
+             . ' WHERE TABLE_SCHEMA = ' . pSQL($dbName)
+             . ' AND TABLE_NAME = ' . pSQL($tableName);
 
-        return (bool) $db->getValue($sql);
+        return (int) $db->getValue($sql) > 0;
+    }
+
+    /**
+     * Helper: Build SQL SET clause from data array.
+     */
+    private function buildUpdateSQL(array $data): string
+    {
+        $sets = [];
+        foreach ($data as $key => $value) {
+            $sets[] = '`' . bqSQL($key) . '` = ' . (is_numeric($value) ? $value : pSQL($value));
+        }
+
+        return implode(', ', $sets);
+    }
+
+    /**
+     * Helper: Build SQL INSERT VALUES clause from data array.
+     */
+    private function buildInsertSQL(array $data): string
+    {
+        $keys = array_map(function($k) { return '`' . bqSQL($k) . '`'; }, array_keys($data));
+        $vals = array_map(function($v) { return is_numeric($v) ? $v : pSQL($v); }, array_values($data));
+
+        return '(' . implode(', ', $keys) . ') VALUES (' . implode(', ', $vals) . ')';
     }
 }
