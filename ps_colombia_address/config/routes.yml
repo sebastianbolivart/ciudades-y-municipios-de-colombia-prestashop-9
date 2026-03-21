@@ -16,7 +16,7 @@ admin_colombia_address_index:
   path: /admin/colombia-address
   methods: [GET]
   defaults:
-    _controller: 'PsColombiaAddress\Controller\Admin\ColombiaAddressController::indexAction'
+    _controller: 'colombia_address.controller.admin::indexAction'
 
 admin_colombia_address_save:
   path: /admin/colombia-address/save

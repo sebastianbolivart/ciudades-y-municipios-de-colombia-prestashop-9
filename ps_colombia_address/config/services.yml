@@ -33,7 +33,8 @@ services:
 
   # ── Admin controller ──────────────────────────────────────────────────────
 
-  PsColombiaAddress\Controller\Admin\ColombiaAddressController:
+  colombia_address.controller.admin:
+    class: PsColombiaAddress\Controller\Admin\ColombiaAddressController
     parent: PrestaShopBundle\Controller\Admin\FrameworkBundleAdminController
     lazy: true
     public: true
@@ -42,3 +43,7 @@ services:
       - '@ps_colombia_address.address_service'
     tags:
       - { name: 'controller.service_arguments' }
+
+  # Alias for direct class reference (Symfony routing compatibility)
+  PsColombiaAddress\Controller\Admin\ColombiaAddressController:
+    alias: colombia_address.controller.admin
