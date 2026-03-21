@@ -1,16 +1,1 @@
-services:
-
-  # ── Address data service ──────────────────────────────────────────────────
-
-  ps_colombia_address.address_service:
-    class: PsColombiaAddress\Service\ColombiaAddressService
-    lazy: true
-    factory: ['PsColombiaAddress\Service\ColombiaAddressServiceFactory', 'create']
-    public: true
-
-  # ── Form modifier ─────────────────────────────────────────────────────────
-
-  ps_colombia_address.form.modifier:
-    class: PsColombiaAddress\Form\ColombiaAddressFormModifier
-    lazy: true
-    public: true
+services: {}

@@ -103,10 +103,8 @@ class Ps_colombia_address extends Module
             return false;
         }
 
-        if (!$this->installAdminTab()) {
-            $this->_errors[] = 'Could not install back-office tab.';
-            return false;
-        }
+        // Defensive cleanup for older broken builds that registered an admin tab.
+        $this->removeAdminTab();
 
         return true;
     }
@@ -313,18 +311,18 @@ class Ps_colombia_address extends Module
     }
 
     /**
-     * Back-office module configuration page — display config form via legacy controller.
+     * Back-office module configuration page.
+     * Uses the standard module HelperForm pattern for maximum compatibility.
      */
     public function getContent(): string
     {
-        if (!class_exists('AdminColombiaAddressController')) {
-            require_once dirname(__FILE__) . '/controllers/admin/AdminColombiaAddress.php';
+        $output = '';
+
+        if (Tools::isSubmit('submitPsColombiaAddressConfig')) {
+            $output .= $this->processConfigurationForm();
         }
 
-        $controller = new AdminColombiaAddressController();
-        $controller->setMedia();
-
-        return $controller->renderPage() ?? '';
+        return $output . $this->renderConfigurationForm();
     }
 
     // ─── Private helpers ──────────────────────────────────────────────────────
@@ -420,24 +418,6 @@ class Ps_colombia_address extends Module
     }
 
     /**
-     * Add a tab entry in the back-office navigation.
-     */
-    private function installAdminTab(): bool
-    {
-        $tab             = new Tab();
-        $tab->active     = 1;
-        $tab->class_name = 'AdminColombiaAddress';
-        $tab->id_parent  = (int) Tab::getIdFromClassName('AdminCatalog');
-        $tab->module     = $this->name;
-
-        foreach (Language::getLanguages(true) as $lang) {
-            $tab->name[(int) $lang['id_lang']] = 'Colombia Address';
-        }
-
-        return (bool) $tab->add();
-    }
-
-    /**
      * Remove the back-office tab entry.
      */
     private function removeAdminTab(): void
@@ -450,14 +430,16 @@ class Ps_colombia_address extends Module
     }
 
     /**
-     * Retrieve the Symfony form-modifier service safely.
+     * Build the form modifier without relying on Symfony service loading.
      *
      * @return \PsColombiaAddress\Form\ColombiaAddressFormModifier|null
      */
     private function getFormModifier(): ?object
     {
         try {
-            return $this->get('ps_colombia_address.form.modifier');
+            require_once dirname(__FILE__) . '/src/Form/ColombiaAddressFormModifier.php';
+
+            return new \PsColombiaAddress\Form\ColombiaAddressFormModifier();
         } catch (\Exception $e) {
             PrestaShopLogger::addLog(
                 sprintf('[ps_colombia_address] Form modifier service unavailable: %s', $e->getMessage()),
@@ -469,6 +451,147 @@ class Ps_colombia_address extends Module
 
             return null;
         }
+    }
+
+    /**
+     * Build the address data service without relying on Symfony service loading.
+     */
+    public function getAddressService(): ?object
+    {
+        try {
+            require_once dirname(__FILE__) . '/src/Service/ColombiaAddressService.php';
+            require_once dirname(__FILE__) . '/src/Service/ColombiaAddressServiceFactory.php';
+
+            return \PsColombiaAddress\Service\ColombiaAddressServiceFactory::create();
+        } catch (\Exception $e) {
+            PrestaShopLogger::addLog(
+                sprintf('[ps_colombia_address] Address service unavailable: %s', $e->getMessage()),
+                3,
+                null,
+                'Module',
+                (int) $this->id
+            );
+
+            return null;
+        }
+    }
+
+    /**
+     * Process module configuration form submission.
+     */
+    private function processConfigurationForm(): string
+    {
+        Configuration::updateValue(self::CONFIG_ENABLE, (int) Tools::getValue(self::CONFIG_ENABLE, 0));
+        Configuration::updateValue(self::CONFIG_AUTOFILL_POSTAL, (int) Tools::getValue(self::CONFIG_AUTOFILL_POSTAL, 0));
+        Configuration::updateValue(self::CONFIG_ENABLE_DROPDOWN, (int) Tools::getValue(self::CONFIG_ENABLE_DROPDOWN, 0));
+        Configuration::updateValue(self::CONFIG_ENABLE_AUTOCOMPLETE, (int) Tools::getValue(self::CONFIG_ENABLE_AUTOCOMPLETE, 0));
+        Configuration::updateValue(self::CONFIG_LOGISTICS_MODE, (int) Tools::getValue(self::CONFIG_LOGISTICS_MODE, 0));
+
+        return $this->displayConfirmation(
+            $this->trans('Configuracion guardada correctamente.', [], 'Modules.PsColombiaAddress.Admin')
+        );
+    }
+
+    /**
+     * Render module configuration form.
+     */
+    private function renderConfigurationForm(): string
+    {
+        $datasetCount = 0;
+        $service = $this->getAddressService();
+        if ($service !== null && method_exists($service, 'getMunicipalityCount')) {
+            $datasetCount = (int) $service->getMunicipalityCount();
+        }
+
+        $fields = [
+            'form' => [
+                'legend' => [
+                    'title' => $this->trans('Configuracion Colombia Address', [], 'Modules.PsColombiaAddress.Admin'),
+                    'icon' => 'icon-cogs',
+                ],
+                'description' => sprintf(
+                    '%s %d',
+                    $this->trans('Municipios cargados en dataset:', [], 'Modules.PsColombiaAddress.Admin'),
+                    $datasetCount
+                ),
+                'input' => [
+                    [
+                        'type' => 'switch',
+                        'label' => $this->trans('Habilitar modulo', [], 'Modules.PsColombiaAddress.Admin'),
+                        'name' => self::CONFIG_ENABLE,
+                        'is_bool' => true,
+                        'values' => [
+                            ['id' => 'enable_on', 'value' => 1, 'label' => $this->trans('Si', [], 'Admin.Global')],
+                            ['id' => 'enable_off', 'value' => 0, 'label' => $this->trans('No', [], 'Admin.Global')],
+                        ],
+                    ],
+                    [
+                        'type' => 'switch',
+                        'label' => $this->trans('Dropdown de municipio', [], 'Modules.PsColombiaAddress.Admin'),
+                        'name' => self::CONFIG_ENABLE_DROPDOWN,
+                        'is_bool' => true,
+                        'values' => [
+                            ['id' => 'dropdown_on', 'value' => 1, 'label' => $this->trans('Si', [], 'Admin.Global')],
+                            ['id' => 'dropdown_off', 'value' => 0, 'label' => $this->trans('No', [], 'Admin.Global')],
+                        ],
+                    ],
+                    [
+                        'type' => 'switch',
+                        'label' => $this->trans('Autocompletar codigo postal', [], 'Modules.PsColombiaAddress.Admin'),
+                        'name' => self::CONFIG_AUTOFILL_POSTAL,
+                        'is_bool' => true,
+                        'values' => [
+                            ['id' => 'postal_on', 'value' => 1, 'label' => $this->trans('Si', [], 'Admin.Global')],
+                            ['id' => 'postal_off', 'value' => 0, 'label' => $this->trans('No', [], 'Admin.Global')],
+                        ],
+                    ],
+                    [
+                        'type' => 'switch',
+                        'label' => $this->trans('Habilitar autocomplete', [], 'Modules.PsColombiaAddress.Admin'),
+                        'name' => self::CONFIG_ENABLE_AUTOCOMPLETE,
+                        'is_bool' => true,
+                        'values' => [
+                            ['id' => 'autocomplete_on', 'value' => 1, 'label' => $this->trans('Si', [], 'Admin.Global')],
+                            ['id' => 'autocomplete_off', 'value' => 0, 'label' => $this->trans('No', [], 'Admin.Global')],
+                        ],
+                    ],
+                    [
+                        'type' => 'switch',
+                        'label' => $this->trans('Modo logistica', [], 'Modules.PsColombiaAddress.Admin'),
+                        'name' => self::CONFIG_LOGISTICS_MODE,
+                        'is_bool' => true,
+                        'values' => [
+                            ['id' => 'logistics_on', 'value' => 1, 'label' => $this->trans('Si', [], 'Admin.Global')],
+                            ['id' => 'logistics_off', 'value' => 0, 'label' => $this->trans('No', [], 'Admin.Global')],
+                        ],
+                    ],
+                ],
+                'submit' => [
+                    'title' => $this->trans('Guardar', [], 'Admin.Actions'),
+                    'name' => 'submitPsColombiaAddressConfig',
+                ],
+            ],
+        ];
+
+        $helper = new HelperForm();
+        $helper->show_toolbar = false;
+        $helper->table = $this->table;
+        $helper->module = $this;
+        $helper->default_form_language = (int) $this->context->language->id;
+        $helper->allow_employee_form_lang = (int) Configuration::get('PS_BO_ALLOW_EMPLOYEE_FORM_LANG', 0);
+        $helper->identifier = $this->identifier;
+        $helper->submit_action = 'submitPsColombiaAddressConfig';
+        $helper->currentIndex = AdminController::$currentIndex . '&configure=' . $this->name;
+        $helper->token = Tools::getAdminTokenLite('AdminModules');
+        $helper->fields_value = [
+            self::CONFIG_ENABLE => (int) Configuration::get(self::CONFIG_ENABLE),
+            self::CONFIG_AUTOFILL_POSTAL => (int) Configuration::get(self::CONFIG_AUTOFILL_POSTAL),
+            self::CONFIG_ENABLE_DROPDOWN => (int) Configuration::get(self::CONFIG_ENABLE_DROPDOWN),
+            self::CONFIG_ENABLE_AUTOCOMPLETE => (int) Configuration::get(self::CONFIG_ENABLE_AUTOCOMPLETE),
+            self::CONFIG_LOGISTICS_MODE => (int) Configuration::get(self::CONFIG_LOGISTICS_MODE),
+        ];
+
+        return $helper->generateForm([$fields]);
     }
 
     /**

@@ -67,8 +67,15 @@ class Ps_colombia_addressMunicipalitiesModuleFrontController extends ModuleFront
 
         // Fetch data through the service.
         try {
-            /** @var \PsColombiaAddress\Service\ColombiaAddressService $service */
-            $service        = $this->module->get('ps_colombia_address.address_service');
+            /** @var object|null $service */
+            $service = method_exists($this->module, 'getAddressService')
+                ? $this->module->getAddressService()
+                : null;
+
+            if ($service === null || !method_exists($service, 'getMunicipalitiesByDepartment')) {
+                throw new \RuntimeException('Address service unavailable.');
+            }
+
             $municipalities = $service->getMunicipalitiesByDepartment($department);
         } catch (\Exception $e) {
             PrestaShopLogger::addLog(
