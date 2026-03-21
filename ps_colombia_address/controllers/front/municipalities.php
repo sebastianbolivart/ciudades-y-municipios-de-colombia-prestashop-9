@@ -61,16 +61,20 @@ class Ps_colombia_addressMunicipalitiesModuleFrontController extends ModuleFront
 
         if ($mode === 'departments') {
             try {
-                $service = method_exists($this->module, 'getAddressService')
-                    ? $this->module->getAddressService()
-                    : null;
+                $rows = Db::getInstance()->executeS(
+                    'SELECT DISTINCT `department` FROM `' . bqSQL(_DB_PREFIX_ . 'colombia_municipality') . '` ORDER BY `department` ASC'
+                );
 
-                if ($service === null || !method_exists($service, 'getDepartments')) {
-                    throw new \RuntimeException('Address service unavailable.');
+                $departments = [];
+                if (is_array($rows)) {
+                    foreach ($rows as $row) {
+                        $name = trim((string) ($row['department'] ?? ''));
+                        if ($name !== '') {
+                            $departments[] = $name;
+                        }
+                    }
                 }
-
-                $departments = $service->getDepartments();
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
                 PrestaShopLogger::addLog(
                     '[ps_colombia_address] AJAX departments error: ' . $e->getMessage(),
                     3
@@ -103,7 +107,7 @@ class Ps_colombia_addressMunicipalitiesModuleFrontController extends ModuleFront
             }
 
             $municipalities = $service->getMunicipalitiesByDepartment($department);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             PrestaShopLogger::addLog(
                 '[ps_colombia_address] AJAX service error: ' . $e->getMessage(),
                 3
