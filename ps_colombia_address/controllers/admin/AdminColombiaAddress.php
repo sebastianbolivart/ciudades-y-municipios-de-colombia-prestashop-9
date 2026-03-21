@@ -81,16 +81,6 @@ class AdminColombiaAddressController extends ModuleAdminController
                     ),
                     array(
                         'type' => 'switch',
-                        'label' => $this->trans('Enable Autocomplete', array(), 'Modules.PsColombiaAddress.Admin'),
-                        'name' => 'COLOMBIA_ADDRESS_ENABLE_AUTOCOMPLETE',
-                        'is_bool' => true,
-                        'values' => array(
-                            array('id' => 'auto_on', 'value' => 1, 'label' => $this->trans('Yes', array(), 'Admin.Global')),
-                            array('id' => 'auto_off', 'value' => 0, 'label' => $this->trans('No', array(), 'Admin.Global'))
-                        ),
-                    ),
-                    array(
-                        'type' => 'switch',
                         'label' => $this->trans('Logistics Mode', array(), 'Modules.PsColombiaAddress.Admin'),
                         'name' => 'COLOMBIA_ADDRESS_LOGISTICS_MODE',
                         'is_bool' => true,
@@ -136,7 +126,6 @@ class AdminColombiaAddressController extends ModuleAdminController
             'COLOMBIA_ADDRESS_ENABLE' => (bool) Configuration::get('COLOMBIA_ADDRESS_ENABLE'),
             'COLOMBIA_ADDRESS_AUTOFILL_POSTAL' => (bool) Configuration::get('COLOMBIA_ADDRESS_AUTOFILL_POSTAL'),
             'COLOMBIA_ADDRESS_ENABLE_DROPDOWN' => (bool) Configuration::get('COLOMBIA_ADDRESS_ENABLE_DROPDOWN'),
-            'COLOMBIA_ADDRESS_ENABLE_AUTOCOMPLETE' => (bool) Configuration::get('COLOMBIA_ADDRESS_ENABLE_AUTOCOMPLETE'),
             'COLOMBIA_ADDRESS_LOGISTICS_MODE' => (bool) Configuration::get('COLOMBIA_ADDRESS_LOGISTICS_MODE'),
         );
     }
@@ -147,7 +136,6 @@ class AdminColombiaAddressController extends ModuleAdminController
             Configuration::updateValue('COLOMBIA_ADDRESS_ENABLE', (int) Tools::getValue('COLOMBIA_ADDRESS_ENABLE'));
             Configuration::updateValue('COLOMBIA_ADDRESS_AUTOFILL_POSTAL', (int) Tools::getValue('COLOMBIA_ADDRESS_AUTOFILL_POSTAL'));
             Configuration::updateValue('COLOMBIA_ADDRESS_ENABLE_DROPDOWN', (int) Tools::getValue('COLOMBIA_ADDRESS_ENABLE_DROPDOWN'));
-            Configuration::updateValue('COLOMBIA_ADDRESS_ENABLE_AUTOCOMPLETE', (int) Tools::getValue('COLOMBIA_ADDRESS_ENABLE_AUTOCOMPLETE'));
             Configuration::updateValue('COLOMBIA_ADDRESS_LOGISTICS_MODE', (int) Tools::getValue('COLOMBIA_ADDRESS_LOGISTICS_MODE'));
 
             $this->confirmations[] = $this->trans('Settings updated successfully.', array(), 'Admin.Notifications.Success');

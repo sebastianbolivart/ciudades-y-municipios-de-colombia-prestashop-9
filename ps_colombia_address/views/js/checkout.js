@@ -32,7 +32,6 @@
  *     baseUrl:            string   AJAX endpoint
  *     autofillPostal:     boolean
  *     logisticsMode:      boolean
- *     enableAutocomplete: boolean
  *     token:              string   PrestaShop static front token
  *   }
  */
@@ -82,6 +81,81 @@
       document.querySelector('#id_country') ||
       null
     );
+  }
+
+  function getCompanyField() {
+    return (
+      document.querySelector('input[name="company"]') ||
+      document.querySelector('input[name="address[company]"]') ||
+      document.querySelector('#company') ||
+      null
+    );
+  }
+
+  function getVatNumberField() {
+    return (
+      document.querySelector('input[name="vat_number"]') ||
+      document.querySelector('input[name="address[vat_number]"]') ||
+      document.querySelector('#vat_number') ||
+      null
+    );
+  }
+
+  function getAddress2Field() {
+    return (
+      document.querySelector('input[name="address2"]') ||
+      document.querySelector('input[name="address[address2]"]') ||
+      document.querySelector('#address2') ||
+      null
+    );
+  }
+
+  function getFieldGroup(field) {
+    if (!field) return null;
+    return field.closest('.form-group') || field.parentNode || null;
+  }
+
+  function moveGroupAfter(group, targetGroup) {
+    if (!group || !targetGroup || group === targetGroup) return;
+    const parent = targetGroup.parentNode;
+    if (!parent || group.parentNode !== parent) return;
+
+    if (targetGroup.nextSibling) {
+      parent.insertBefore(group, targetGroup.nextSibling);
+      return;
+    }
+
+    parent.appendChild(group);
+  }
+
+  function hideOptionalAddressFields() {
+    [getCompanyField(), getVatNumberField(), getAddress2Field()].forEach(function (field) {
+      const group = getFieldGroup(field);
+      if (group && group.style) {
+        group.style.display = 'none';
+      }
+    });
+  }
+
+  function reorderAddressGroups() {
+    const postcodeGroup = getFieldGroup(getPostalCodeField());
+    const countryGroup = getFieldGroup(getCountrySelect());
+    const departmentGroup = getFieldGroup(getDepartmentSelect()) || getDynamicDepartmentGroup();
+    const cityGroup = getFieldGroup(getCityField());
+
+    if (postcodeGroup && countryGroup) {
+      moveGroupAfter(countryGroup, postcodeGroup);
+    }
+
+    const currentCountryGroup = getFieldGroup(getCountrySelect());
+    if (currentCountryGroup && departmentGroup) {
+      moveGroupAfter(departmentGroup, currentCountryGroup);
+    }
+
+    const currentDepartmentGroup = getFieldGroup(getDepartmentSelect()) || getDynamicDepartmentGroup();
+    if (currentDepartmentGroup && cityGroup) {
+      moveGroupAfter(cityGroup, currentDepartmentGroup);
+    }
   }
 
   function getSelectedOptionText(select) {
@@ -637,88 +711,6 @@
     }
   }
 
-  // ── Autocomplete (optional) ────────────────────────────────────────────
-
-  /**
-   * Convert the municipality select into an autocomplete text input.
-   * Only activated when window.colombiaAddressConfig.enableAutocomplete is true.
-   */
-  function initAutocomplete() {
-    const municipalitySelect = getMunicipalitySelect();
-    if (!municipalitySelect) return;
-
-    // When municipality is rendered directly as the city-bound select,
-    // keep a single control (select) to avoid duplicate UI.
-    if (municipalitySelect.hasAttribute('data-colombia-city-select')) {
-      return;
-    }
-
-    // Replace the <select> with a text <input> + a hidden backing field.
-    const textInput = document.createElement('input');
-    textInput.type        = 'text';
-    textInput.className   = municipalitySelect.className + ' colombia-autocomplete';
-    textInput.placeholder = 'Buscar municipio…';
-    textInput.autocomplete = 'off';
-    textInput.setAttribute('aria-label', 'Municipio');
-
-    const hiddenInput = document.createElement('input');
-    hiddenInput.type = 'hidden';
-    hiddenInput.name = municipalitySelect.name;
-
-    municipalitySelect.parentNode.insertBefore(textInput, municipalitySelect);
-    municipalitySelect.parentNode.insertBefore(hiddenInput, municipalitySelect);
-    municipalitySelect.style.display = 'none';
-
-    // Suggestion list
-    const suggestionList = document.createElement('ul');
-    suggestionList.className = 'colombia-autocomplete-suggestions';
-    suggestionList.style.cssText = 'position:absolute;z-index:9999;background:#fff;border:1px solid #ccc;list-style:none;margin:0;padding:0;max-height:200px;overflow-y:auto;min-width:200px;';
-    textInput.parentNode.style.position = 'relative';
-    textInput.parentNode.insertBefore(suggestionList, textInput.nextSibling);
-
-    function clearSuggestions() {
-      suggestionList.innerHTML = '';
-      suggestionList.style.display = 'none';
-    }
-
-    textInput.addEventListener('input', function () {
-      const query   = textInput.value.trim().toLowerCase();
-      const options = Array.from(municipalitySelect.options);
-
-      clearSuggestions();
-      if (!query) return;
-
-      const matches = options.filter(function (o) {
-        return o.value && o.textContent.toLowerCase().includes(query);
-      });
-
-      if (!matches.length) return;
-
-      matches.slice(0, 10).forEach(function (opt) {
-        const li = document.createElement('li');
-        li.textContent = opt.textContent;  // safe: text only
-        li.style.cssText = 'padding:6px 10px;cursor:pointer;';
-        li.addEventListener('mousedown', function () {
-          textInput.value    = opt.textContent.trim();
-          hiddenInput.value  = opt.value;
-          clearSuggestions();
-
-          // Trigger the municipality change side-effects.
-          municipalitySelect.value = opt.value;
-          onMunicipalityChange({ target: municipalitySelect });
-        });
-        suggestionList.appendChild(li);
-      });
-      suggestionList.style.display = 'block';
-    });
-
-    document.addEventListener('click', function (e) {
-      if (!textInput.contains(e.target) && !suggestionList.contains(e.target)) {
-        clearSuggestions();
-      }
-    });
-  }
-
   // ── Initialisation ─────────────────────────────────────────────────────
 
   /**
@@ -731,6 +723,9 @@
     const cityField = getCityField();
     const preselectedCity = cityField ? String(cityField.value || '').trim() : '';
     const preselectedDepartment = getInitialDepartmentSelection();
+
+    hideOptionalAddressFields();
+    reorderAddressGroups();
 
     if (!colombia) {
       setNativeDepartmentVisible(true);
@@ -805,10 +800,6 @@
     const municipalitySelect = getMunicipalitySelect();
     if (municipalitySelect) {
       municipalitySelect.addEventListener('change', onMunicipalityChange);
-    }
-
-    if (CONFIG.enableAutocomplete && !getCityMunicipalitySelect()) {
-      initAutocomplete();
     }
 
     // Initial municipalities load is handled by loadDepartments(preselectDept, preselectCity).

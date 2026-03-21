@@ -124,24 +124,6 @@
           </div>
         </div>
 
-        {# Autocomplete search #}
-        <div class="form-group row">
-          <label class="col-sm-3 col-form-label" for="enable_autocomplete">
-            {{ 'Enable municipality autocomplete'|trans({}, 'Modules.PsColombiaAddress.Admin') }}
-          </label>
-          <div class="col-sm-9">
-            <div class="ps-switch">
-              <input type="checkbox" id="enable_autocomplete" name="enable_autocomplete" value="1"
-                     {{ enableAutocomplete ? 'checked' : '' }}>
-              <label for="enable_autocomplete">
-                <span>{{ 'Yes'|trans({}, 'Admin.Global') }}</span>
-                <span>{{ 'No'|trans({}, 'Admin.Global') }}</span>
-                <a class="slide-button btn"></a>
-              </label>
-            </div>
-          </div>
-        </div>
-
         {# Logistics mode #}
         <div class="form-group row">
           <label class="col-sm-3 col-form-label" for="logistics_mode">

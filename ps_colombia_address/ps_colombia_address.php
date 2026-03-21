@@ -35,7 +35,6 @@ class Ps_colombia_address extends Module
     public const CONFIG_ENABLE             = 'COLOMBIA_ADDRESS_ENABLE';
     public const CONFIG_AUTOFILL_POSTAL    = 'COLOMBIA_ADDRESS_AUTOFILL_POSTAL';
     public const CONFIG_ENABLE_DROPDOWN    = 'COLOMBIA_ADDRESS_ENABLE_DROPDOWN';
-    public const CONFIG_ENABLE_AUTOCOMPLETE = 'COLOMBIA_ADDRESS_ENABLE_AUTOCOMPLETE';
     public const CONFIG_LOGISTICS_MODE     = 'COLOMBIA_ADDRESS_LOGISTICS_MODE';
 
     /** Maximum allowed size for an imported CSV (10 MB). */
@@ -227,7 +226,6 @@ class Ps_colombia_address extends Module
                 ),
                 'autofillPostal'    => (bool) Configuration::get(self::CONFIG_AUTOFILL_POSTAL),
                 'logisticsMode'     => (bool) Configuration::get(self::CONFIG_LOGISTICS_MODE),
-                'enableAutocomplete' => (bool) Configuration::get(self::CONFIG_ENABLE_AUTOCOMPLETE),
                 'token'             => $token,
             ],
         ]);
@@ -429,11 +427,19 @@ class Ps_colombia_address extends Module
     {
         $output = '';
 
+        if (Tools::isSubmit('submitPsColombiaAddressDeleteMunicipalities')) {
+            $output .= $this->processDeleteMunicipalitiesAction();
+        }
+
+        if (Tools::isSubmit('submitPsColombiaAddressDeleteStates')) {
+            $output .= $this->processDeleteStatesAction();
+        }
+
         if (Tools::isSubmit('submitPsColombiaAddressConfig')) {
             $output .= $this->processConfigurationForm();
         }
 
-        return $output . $this->renderConfigurationForm();
+        return $output . $this->renderConfigurationForm() . $this->renderMaintenancePanel();
     }
 
     // ─── Private helpers ──────────────────────────────────────────────────────
@@ -507,7 +513,6 @@ class Ps_colombia_address extends Module
             Configuration::updateValue(self::CONFIG_ENABLE, '1')
             && Configuration::updateValue(self::CONFIG_AUTOFILL_POSTAL, '1')
             && Configuration::updateValue(self::CONFIG_ENABLE_DROPDOWN, '1')
-            && Configuration::updateValue(self::CONFIG_ENABLE_AUTOCOMPLETE, '0')
             && Configuration::updateValue(self::CONFIG_LOGISTICS_MODE, '1');
     }
 
@@ -520,7 +525,6 @@ class Ps_colombia_address extends Module
             self::CONFIG_ENABLE,
             self::CONFIG_AUTOFILL_POSTAL,
             self::CONFIG_ENABLE_DROPDOWN,
-            self::CONFIG_ENABLE_AUTOCOMPLETE,
             self::CONFIG_LOGISTICS_MODE,
         ];
         foreach ($keys as $key) {
@@ -595,7 +599,6 @@ class Ps_colombia_address extends Module
         Configuration::updateValue(self::CONFIG_ENABLE, (int) Tools::getValue(self::CONFIG_ENABLE, 0));
         Configuration::updateValue(self::CONFIG_AUTOFILL_POSTAL, (int) Tools::getValue(self::CONFIG_AUTOFILL_POSTAL, 0));
         Configuration::updateValue(self::CONFIG_ENABLE_DROPDOWN, (int) Tools::getValue(self::CONFIG_ENABLE_DROPDOWN, 0));
-        Configuration::updateValue(self::CONFIG_ENABLE_AUTOCOMPLETE, (int) Tools::getValue(self::CONFIG_ENABLE_AUTOCOMPLETE, 0));
         Configuration::updateValue(self::CONFIG_LOGISTICS_MODE, (int) Tools::getValue(self::CONFIG_LOGISTICS_MODE, 0));
 
         $importMessage = $this->processMunicipalitiesCsvUpload();
@@ -783,16 +786,6 @@ class Ps_colombia_address extends Module
                     ],
                     [
                         'type' => 'switch',
-                        'label' => $this->trans('Habilitar autocomplete', [], 'Modules.PsColombiaAddress.Admin'),
-                        'name' => self::CONFIG_ENABLE_AUTOCOMPLETE,
-                        'is_bool' => true,
-                        'values' => [
-                            ['id' => 'autocomplete_on', 'value' => 1, 'label' => $this->trans('Si', [], 'Admin.Global')],
-                            ['id' => 'autocomplete_off', 'value' => 0, 'label' => $this->trans('No', [], 'Admin.Global')],
-                        ],
-                    ],
-                    [
-                        'type' => 'switch',
                         'label' => $this->trans('Modo logistica', [], 'Modules.PsColombiaAddress.Admin'),
                         'name' => self::CONFIG_LOGISTICS_MODE,
                         'is_bool' => true,
@@ -844,11 +837,174 @@ class Ps_colombia_address extends Module
             self::CONFIG_ENABLE => (int) Configuration::get(self::CONFIG_ENABLE),
             self::CONFIG_AUTOFILL_POSTAL => (int) Configuration::get(self::CONFIG_AUTOFILL_POSTAL),
             self::CONFIG_ENABLE_DROPDOWN => (int) Configuration::get(self::CONFIG_ENABLE_DROPDOWN),
-            self::CONFIG_ENABLE_AUTOCOMPLETE => (int) Configuration::get(self::CONFIG_ENABLE_AUTOCOMPLETE),
             self::CONFIG_LOGISTICS_MODE => (int) Configuration::get(self::CONFIG_LOGISTICS_MODE),
         ];
 
         return $helper->generateForm([$fields]);
+    }
+
+    /**
+     * Render manual maintenance actions for dataset cleanup.
+     */
+    private function renderMaintenancePanel(): string
+    {
+        $actionUrl = AdminController::$currentIndex
+            . '&configure=' . $this->name
+            . '&token=' . Tools::getAdminTokenLite('AdminModules');
+
+        $deleteMunicipalitiesLabel = $this->trans(
+            'Eliminar municipios cargados',
+            [],
+            'Modules.PsColombiaAddress.Admin'
+        );
+        $deleteStatesLabel = $this->trans(
+            'Eliminar departamentos de Colombia',
+            [],
+            'Modules.PsColombiaAddress.Admin'
+        );
+
+        $title = $this->trans('Mantenimiento manual', [], 'Modules.PsColombiaAddress.Admin');
+        $description = $this->trans(
+            'Estas acciones eliminan unicamente el dataset de municipios del modulo y/o los estados del pais Colombia en PrestaShop. No eliminan estados de otros paises ni otras tablas ajenas al modulo.',
+            [],
+            'Modules.PsColombiaAddress.Admin'
+        );
+        $municipalityHelp = $this->trans(
+            'Borra todos los registros de la tabla del modulo que almacena municipios de Colombia.',
+            [],
+            'Modules.PsColombiaAddress.Admin'
+        );
+        $statesHelp = $this->trans(
+            'Borra unicamente los estados/departamentos cuyo pais es Colombia en la tabla nativa de estados de PrestaShop.',
+            [],
+            'Modules.PsColombiaAddress.Admin'
+        );
+                $deleteMunicipalitiesConfirm = $this->trans(
+                        'Esta accion eliminara todos los municipios cargados por el modulo. Solo continua si vas a volver a importarlos. Deseas continuar?',
+                        [],
+                        'Modules.PsColombiaAddress.Admin'
+                );
+                $deleteStatesConfirm = $this->trans(
+                        'Esta accion eliminara unicamente los departamentos/estados del pais Colombia en PrestaShop. Las direcciones colombianas existentes pueden quedar sin departamento hasta reimportarlos. Deseas continuar?',
+                        [],
+                        'Modules.PsColombiaAddress.Admin'
+                );
+
+        return '
+        <div class="panel">
+          <h3><i class="icon-trash"></i> ' . Tools::safeOutput($title) . '</h3>
+          <p>' . Tools::safeOutput($description) . '</p>
+          <div class="well">
+            <p><strong>' . Tools::safeOutput($deleteMunicipalitiesLabel) . '</strong><br>' . Tools::safeOutput($municipalityHelp) . '</p>
+                        <form method="post" action="' . Tools::safeOutput($actionUrl) . '" onsubmit="return confirm(&quot;' . Tools::safeOutput($deleteMunicipalitiesConfirm) . '&quot;);">
+              <button type="submit" name="submitPsColombiaAddressDeleteMunicipalities" class="btn btn-danger">
+                ' . Tools::safeOutput($deleteMunicipalitiesLabel) . '
+              </button>
+            </form>
+          </div>
+          <div class="well" style="margin-top: 15px;">
+            <p><strong>' . Tools::safeOutput($deleteStatesLabel) . '</strong><br>' . Tools::safeOutput($statesHelp) . '</p>
+                        <form method="post" action="' . Tools::safeOutput($actionUrl) . '" onsubmit="return confirm(&quot;' . Tools::safeOutput($deleteStatesConfirm) . '&quot;);">
+              <button type="submit" name="submitPsColombiaAddressDeleteStates" class="btn btn-danger">
+                ' . Tools::safeOutput($deleteStatesLabel) . '
+              </button>
+            </form>
+          </div>
+        </div>';
+    }
+
+    /**
+     * Delete only the municipalities dataset owned by this module.
+     */
+    private function processDeleteMunicipalitiesAction(): string
+    {
+        $deleted = $this->deleteMunicipalityDataset();
+
+        if ($deleted < 0) {
+            return $this->displayError(
+                $this->trans('No fue posible eliminar los municipios cargados.', [], 'Modules.PsColombiaAddress.Admin')
+            );
+        }
+
+        return $this->displayConfirmation(
+            sprintf(
+                $this->trans('Municipios eliminados correctamente: %d.', [], 'Modules.PsColombiaAddress.Admin'),
+                $deleted
+            )
+        );
+    }
+
+    /**
+     * Delete only PrestaShop states that belong to Colombia.
+     */
+    private function processDeleteStatesAction(): string
+    {
+        $deleted = $this->deleteColombiaStates();
+
+        if ($deleted < 0) {
+            return $this->displayError(
+                $this->trans('No fue posible eliminar los departamentos de Colombia.', [], 'Modules.PsColombiaAddress.Admin')
+            );
+        }
+
+        return $this->displayConfirmation(
+            sprintf(
+                $this->trans('Departamentos de Colombia eliminados correctamente: %d.', [], 'Modules.PsColombiaAddress.Admin'),
+                $deleted
+            )
+        );
+    }
+
+    /**
+     * Remove all rows from the module municipality dataset table.
+     * The table contains only Colombian municipalities owned by this module.
+     */
+    private function deleteMunicipalityDataset(): int
+    {
+        $db = Db::getInstance();
+        $tableSql = $this->resolveSqlTableName($db, 'colombia_municipality');
+
+        if (!$this->tableExists($db, $tableSql)) {
+            return 0;
+        }
+
+        $count = (int) $db->getValue('SELECT COUNT(*) FROM `' . bqSQL($tableSql) . '`');
+
+        if ($count > 0 && $db->execute('DELETE FROM `' . bqSQL($tableSql) . '`') === false) {
+            return -1;
+        }
+
+        return $count;
+    }
+
+    /**
+     * Remove only native PrestaShop states whose country is Colombia.
+     */
+    private function deleteColombiaStates(): int
+    {
+        $db = Db::getInstance();
+        $countryTable = _DB_PREFIX_ . 'country';
+        $stateTable = _DB_PREFIX_ . 'state';
+
+        $idCountry = (int) $db->getValue(
+            'SELECT `id_country` FROM `' . bqSQL($countryTable) . '` WHERE `iso_code` = \'CO\''
+        );
+
+        if ($idCountry <= 0) {
+            return -1;
+        }
+
+        $count = (int) $db->getValue(
+            'SELECT COUNT(*) FROM `' . bqSQL($stateTable) . '` WHERE `id_country` = ' . $idCountry
+        );
+
+        if ($count > 0 && $db->execute(
+            'DELETE FROM `' . bqSQL($stateTable) . '` WHERE `id_country` = ' . $idCountry
+        ) === false) {
+            return -1;
+        }
+
+        return $count;
     }
 
     /**

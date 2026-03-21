@@ -74,7 +74,6 @@ class ColombiaAddressController extends FrameworkBundleAdminController
                 'enableModule'       => (bool) Configuration::get('COLOMBIA_ADDRESS_ENABLE'),
                 'autofillPostal'     => (bool) Configuration::get('COLOMBIA_ADDRESS_AUTOFILL_POSTAL'),
                 'enableDropdown'     => (bool) Configuration::get('COLOMBIA_ADDRESS_ENABLE_DROPDOWN'),
-                'enableAutocomplete' => (bool) Configuration::get('COLOMBIA_ADDRESS_ENABLE_AUTOCOMPLETE'),
                 'logisticsMode'      => (bool) Configuration::get('COLOMBIA_ADDRESS_LOGISTICS_MODE'),
                 'datasetCount'       => $this->addressService->getMunicipalityCount(),
             ]
@@ -106,10 +105,6 @@ class ColombiaAddressController extends FrameworkBundleAdminController
         Configuration::updateValue(
             'COLOMBIA_ADDRESS_ENABLE_DROPDOWN',
             $request->request->getBoolean('enable_dropdown') ? '1' : '0'
-        );
-        Configuration::updateValue(
-            'COLOMBIA_ADDRESS_ENABLE_AUTOCOMPLETE',
-            $request->request->getBoolean('enable_autocomplete') ? '1' : '0'
         );
         Configuration::updateValue(
             'COLOMBIA_ADDRESS_LOGISTICS_MODE',
