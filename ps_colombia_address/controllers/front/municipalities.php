@@ -57,6 +57,32 @@ class Ps_colombia_addressMunicipalitiesModuleFrontController extends ModuleFront
             $this->jsonError('Invalid or missing security token.', 403);
         }
 
+        $mode = Tools::strtolower((string) Tools::getValue('list', ''));
+
+        if ($mode === 'departments') {
+            try {
+                $service = method_exists($this->module, 'getAddressService')
+                    ? $this->module->getAddressService()
+                    : null;
+
+                if ($service === null || !method_exists($service, 'getDepartments')) {
+                    throw new \RuntimeException('Address service unavailable.');
+                }
+
+                $departments = $service->getDepartments();
+            } catch (\Exception $e) {
+                PrestaShopLogger::addLog(
+                    '[ps_colombia_address] AJAX departments error: ' . $e->getMessage(),
+                    3
+                );
+                $this->jsonError('Internal server error.', 500);
+            }
+
+            header('Cache-Control: public, max-age=600, s-maxage=3600');
+            header('Vary: Accept-Encoding');
+            $this->jsonSuccess(['departments' => $departments]);
+        }
+
         // Sanitise and validate the department parameter.
         $rawDept    = (string) Tools::getValue('department', '');
         $department = $this->sanitiseDepartment($rawDept);

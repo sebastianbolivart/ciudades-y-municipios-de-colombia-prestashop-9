@@ -57,6 +57,7 @@ final class ColombiaAddressFormModifier
             return;
         }
 
+        $this->ensureStateFieldVisible($formBuilder);
         $this->addMunicipalityField($formBuilder, $params);
         $this->addDaneCodeField($formBuilder);
     }
@@ -113,5 +114,23 @@ final class ColombiaAddressFormModifier
                 'data-colombia-dane-code' => '1',
             ],
         ]);
+    }
+
+    /**
+     * Ensure the id_state (department/state) field is visible in the form.
+     * In PrestaShop 9, this field may be hidden by the system if the
+     * current country doesn't have states. Since we're adding states for
+     * Colombia, we need to make sure it's visible.
+     *
+     * @param FormBuilderInterface $formBuilder
+     */
+    private function ensureStateFieldVisible(FormBuilderInterface $formBuilder): void
+    {
+        if ($formBuilder->has('id_state')) {
+            $field = $formBuilder->get('id_state');
+            $options = $field->getOptions();
+            $options['attr']['class'] = (isset($options['attr']['class']) ? $options['attr']['class'] . ' ' : '') . 'form-control';
+            $field->setData($field->getData());
+        }
     }
 }
