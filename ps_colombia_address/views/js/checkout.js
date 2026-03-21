@@ -84,6 +84,26 @@
     );
   }
 
+  function getSelectedOptionText(select) {
+    if (!select || !select.options || select.selectedIndex < 0) return '';
+    const selected = select.options[select.selectedIndex];
+    if (!selected) return '';
+    return String(selected.textContent || '').trim();
+  }
+
+  function getInitialDepartmentName() {
+    const dynamicSelect = getDynamicDepartmentSelect();
+    if (dynamicSelect && dynamicSelect.value) {
+      return String(dynamicSelect.value || '').trim();
+    }
+
+    const nativeSelect = getNativeDepartmentSelect();
+    if (!nativeSelect) return '';
+    if (!nativeSelect.value) return '';
+
+    return getSelectedOptionText(nativeSelect);
+  }
+
   function isColombiaSelected() {
     const countrySelect = getCountrySelect();
     if (!countrySelect) return false;
@@ -145,15 +165,30 @@
     return document.querySelector('.colombia-municipality-group');
   }
 
+  function getCityMunicipalitySelect() {
+    return document.querySelector('select[data-colombia-city-select]');
+  }
+
   function setColombiaUiVisible(visible) {
     const deptGroup = getDynamicDepartmentGroup();
     const muniGroup = getDynamicMunicipalityGroup();
+    const cityField = getCityField();
+    const citySelect = getCityMunicipalitySelect();
 
     if (deptGroup) {
       deptGroup.style.display = visible ? '' : 'none';
     }
     if (muniGroup) {
       muniGroup.style.display = visible ? '' : 'none';
+    }
+
+    if (cityField) {
+      cityField.style.display = visible ? 'none' : '';
+      cityField.disabled = !!visible;
+    }
+    if (citySelect) {
+      citySelect.style.display = visible ? '' : 'none';
+      citySelect.disabled = !visible;
     }
   }
 
@@ -174,6 +209,7 @@
    */
   function getMunicipalitySelect() {
     const existing = (
+      getCityMunicipalitySelect() ||
       document.querySelector('[data-colombia-municipality]') ||
       document.querySelector('select[name="colombia_municipality"]') ||
       document.querySelector('select[name="address[colombia_municipality]"]') ||
@@ -241,32 +277,19 @@
     const cityField = getCityField();
     if (!cityField || !cityField.parentNode) return null;
 
-    const wrapper = document.createElement('div');
-    wrapper.className = 'form-group row colombia-municipality-group';
-
-    const label = document.createElement('label');
-    label.className = 'col-md-3 form-control-label';
-    label.textContent = 'Municipio';
-    label.setAttribute('for', 'colombia_municipality');
-
-    const inputCol = document.createElement('div');
-    inputCol.className = 'col-md-6 js-input-column';
+    const existing = getCityMunicipalitySelect();
+    if (existing) return existing;
 
     const select = document.createElement('select');
-    select.id = 'colombia_municipality';
-    select.name = 'colombia_municipality';
+    select.id = 'colombia_city_select';
+    select.name = cityField.name || 'city';
     select.className = 'form-control form-control-select colombia-municipality-select';
-    select.setAttribute('data-colombia-municipality', '1');
+    select.setAttribute('data-colombia-city-select', '1');
     select.setAttribute('data-autofill-postal', CONFIG.autofillPostal ? '1' : '0');
     select.appendChild(createOption('', '— Seleccione un municipio —'));
 
-    inputCol.appendChild(select);
-    wrapper.appendChild(label);
-    wrapper.appendChild(inputCol);
-
-    // Insert the municipality selector right before city field container.
-    const cityContainer = cityField.closest('.form-group') || cityField.parentNode;
-    cityContainer.parentNode.insertBefore(wrapper, cityContainer);
+    cityField.parentNode.insertBefore(select, cityField.nextSibling);
+    cityField.style.display = 'none';
 
     return select;
   }
@@ -326,14 +349,18 @@
   const municipalitiesCache = Object.create(null);
   const departmentsCache = [];
 
-  function loadDepartments(preselect) {
+  function loadDepartments(preselect, preselectMunicipality) {
     const deptSelect = ensureDepartmentSelect();
     if (!deptSelect) return;
 
     preselect = preselect || '';
+    preselectMunicipality = preselectMunicipality || '';
 
     if (departmentsCache.length > 0) {
       populateDepartments(deptSelect, departmentsCache, preselect);
+      if (deptSelect.value) {
+        loadMunicipalities(deptSelect.value, preselectMunicipality);
+      }
       return;
     }
 
@@ -367,6 +394,10 @@
         Array.prototype.push.apply(departmentsCache, data.departments);
         populateDepartments(deptSelect, data.departments, preselect);
         deptSelect.disabled = false;
+
+        if (deptSelect.value) {
+          loadMunicipalities(deptSelect.value, preselectMunicipality);
+        }
       })
       .catch(function (err) {
         console.error('[ps_colombia_address] Failed to load departments:', err);
@@ -626,6 +657,9 @@
   function init() {
     const countrySelect = getCountrySelect();
     const colombia = isColombiaSelected();
+    const cityField = getCityField();
+    const preselectedCity = cityField ? String(cityField.value || '').trim() : '';
+    const preselectedDepartment = getInitialDepartmentName();
 
     if (!colombia) {
       setNativeDepartmentVisible(true);
@@ -646,7 +680,7 @@
     if (deptSelect.dataset.colombiaInit === '1') return;
     deptSelect.dataset.colombiaInit = '1';
 
-    loadDepartments();
+    loadDepartments(preselectedDepartment, preselectedCity);
 
     deptSelect.addEventListener('change', onDepartmentChange);
 
@@ -674,12 +708,7 @@
       initAutocomplete();
     }
 
-    // If a department is already selected (edit form), load its municipalities.
-    const currentDept = deptSelect.options[deptSelect.selectedIndex];
-    if (currentDept && currentDept.value) {
-      const preselectedCity = (getCityField() || {}).value || '';
-      loadMunicipalities(currentDept.textContent.trim(), preselectedCity);
-    }
+    // Initial municipalities load is handled by loadDepartments(preselectDept, preselectCity).
   }
 
   // ── Bootstrap ──────────────────────────────────────────────────────────

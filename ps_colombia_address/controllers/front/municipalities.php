@@ -95,21 +95,30 @@ class Ps_colombia_addressMunicipalitiesModuleFrontController extends ModuleFront
             $this->jsonError('Missing or invalid "department" parameter.', 400);
         }
 
-        // Fetch data through the service.
+        // Fetch municipalities directly via DB (same pattern as departments endpoint).
         try {
-            /** @var object|null $service */
-            $service = method_exists($this->module, 'getAddressService')
-                ? $this->module->getAddressService()
-                : null;
+            $rows = Db::getInstance()->executeS(
+                'SELECT `municipality`, `postal_code`, `dane_code`, `latitude`, `longitude`
+                   FROM `' . bqSQL(_DB_PREFIX_ . 'colombia_municipality') . '`
+                  WHERE `department` = \'' . pSQL($department) . '\'
+               ORDER BY `municipality` ASC'
+            );
 
-            if ($service === null || !method_exists($service, 'getMunicipalitiesByDepartment')) {
-                throw new \RuntimeException('Address service unavailable.');
+            $municipalities = [];
+            if (is_array($rows)) {
+                foreach ($rows as $row) {
+                    $municipalities[] = [
+                        'name'        => (string) ($row['municipality'] ?? ''),
+                        'postal_code' => (string) ($row['postal_code'] ?? ''),
+                        'dane_code'   => (string) ($row['dane_code']   ?? ''),
+                        'latitude'    => (string) ($row['latitude']    ?? ''),
+                        'longitude'   => (string) ($row['longitude']   ?? ''),
+                    ];
+                }
             }
-
-            $municipalities = $service->getMunicipalitiesByDepartment($department);
         } catch (\Throwable $e) {
             PrestaShopLogger::addLog(
-                '[ps_colombia_address] AJAX service error: ' . $e->getMessage(),
+                '[ps_colombia_address] AJAX municipalities error: ' . $e->getMessage(),
                 3
             );
             $this->jsonError('Internal server error.', 500);
