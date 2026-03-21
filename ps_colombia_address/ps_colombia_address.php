@@ -583,27 +583,45 @@ class Ps_colombia_address extends Module
     }
 
     /**
-     * Check if a table exists in current database using INFORMATION_SCHEMA.
-     * More reliable than SHOW TABLES in MariaDB contexts.
+     * Check if a table exists in current database.
+     * Compatible with both MySQL and MariaDB using INFORMATION_SCHEMA.
      */
     private function tableExists(Db $db, string $tableName): bool
     {
-        $dbName = (string) $db->getValue('SELECT DATABASE()');
-        $sql = 'SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES'
-             . ' WHERE TABLE_SCHEMA = ' . pSQL($dbName)
-             . ' AND TABLE_NAME = ' . pSQL($tableName);
+        try {
+            // Get current database name
+            $dbName = (string) $db->getValue('SELECT DATABASE()');
+            if (empty($dbName)) {
+                return false;
+            }
 
-        return (int) $db->getValue($sql) > 0;
+            // Use INFORMATION_SCHEMA (compatible with MySQL 5.7+ and MariaDB 10.1+)
+            $sql = 'SELECT 1 FROM INFORMATION_SCHEMA.TABLES'
+                 . ' WHERE TABLE_SCHEMA = ' . pSQL($dbName)
+                 . ' AND TABLE_NAME = ' . pSQL($tableName)
+                 . ' LIMIT 1';
+
+            return (bool) $db->getValue($sql);
+        } catch (\Exception $e) {
+            // Fallback for ancient MySQL/MariaDB versions
+            try {
+                $result = $db->getValue('DESCRIBE `' . bqSQL($tableName) . '` LIMIT 1');
+                return (bool) $result;
+            } catch (\Exception $ex) {
+                return false;
+            }
+        }
     }
 
     /**
      * Helper: Build SQL SET clause from data array.
+     * Compatible with MySQL and MariaDB.
      */
     private function buildUpdateSQL(array $data): string
     {
         $sets = [];
         foreach ($data as $key => $value) {
-            $sets[] = '`' . bqSQL($key) . '` = ' . (is_numeric($value) ? $value : pSQL($value));
+            $sets[] = '`' . bqSQL($key) . '` = ' . $this->sqlValue($value);
         }
 
         return implode(', ', $sets);
@@ -611,12 +629,42 @@ class Ps_colombia_address extends Module
 
     /**
      * Helper: Build SQL INSERT VALUES clause from data array.
+     * Compatible with MySQL and MariaDB.
      */
     private function buildInsertSQL(array $data): string
     {
         $keys = array_map(function($k) { return '`' . bqSQL($k) . '`'; }, array_keys($data));
-        $vals = array_map(function($v) { return is_numeric($v) ? $v : pSQL($v); }, array_values($data));
+        $vals = array_map(function($v) { return $this->sqlValue($v); }, array_values($data));
 
         return '(' . implode(', ', $keys) . ') VALUES (' . implode(', ', $vals) . ')';
+    }
+
+    /**
+     * Convert a PHP value to SQL-safe representation.
+     * Handles strings, integers, floats, and null.
+     * Compatible with both MySQL and MariaDB.
+     */
+    private function sqlValue($value): string
+    {
+        if ($value === null) {
+            return 'NULL';
+        }
+
+        if (is_bool($value)) {
+            return $value ? '1' : '0';
+        }
+
+        if (is_int($value)) {
+            return (string) $value;
+        }
+
+        if (is_float($value)) {
+            // Preserve float precision for coordinates (decimal(10,8), decimal(11,8))
+            // Works correctly in both MySQL and MariaDB
+            return number_format($value, 10, '.', '');
+        }
+
+        // String (default) - PrestaShop pSQL() works for both MySQL and MariaDB
+        return pSQL((string) $value);
     }
 }
