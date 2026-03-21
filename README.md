@@ -179,7 +179,7 @@ El módulo necesita que Colombia tenga departamentos cargados en la tabla de `st
 
 Opciones para cargar departamentos:
 
-1. Desde `Configurar`, usa el campo **Importar departamentos (states) CSV**.
+1. Desde `Configurar`, usa el campo **Importar municipios (ciudades) CSV**.
 2. O ejecuta el script SQL auxiliar:
 
 - `ps_colombia_address/sql/load_colombia_departments_as_states.sql`

@@ -456,6 +456,9 @@
   /** In-memory cache to avoid duplicate AJAX calls per page load. */
   const municipalitiesCache = Object.create(null);
   const departmentsCache = [];
+  
+  /** Flag to track if user is actively interacting with selects */
+  let isUserInteracting = false;
 
   function shouldHydrateFromSavedCity(savedCity) {
     const deptSelect = getDepartmentSelect();
@@ -730,6 +733,11 @@
    * Safe to call multiple times (e.g. after checkout AJAX refresh).
    */
   function init() {
+    // Skip init if user is currently interacting with form selects
+    if (isUserInteracting) {
+      return;
+    }
+    
     const countrySelect = getCountrySelect();
     const colombia = isColombiaSelected();
     const cityField = getCityField();
@@ -800,6 +808,23 @@
     runInitialHydration();
 
     deptSelect.addEventListener('change', onDepartmentChange);
+    
+    // Track user interaction to prevent MutationObserver from interrupting
+    deptSelect.addEventListener('focus', function() {
+      isUserInteracting = true;
+    });
+    deptSelect.addEventListener('blur', function() {
+      isUserInteracting = false;
+    });
+    deptSelect.addEventListener('mousedown', function() {
+      isUserInteracting = true;
+    });
+    deptSelect.addEventListener('mouseup', function() {
+      // Re-enable init after a brief delay to allow dropdown to stabilize
+      setTimeout(function() {
+        isUserInteracting = false;
+      }, 100);
+    });
 
     if (countrySelect && countrySelect.dataset.colombiaInit !== '1') {
       countrySelect.dataset.colombiaInit = '1';
@@ -823,6 +848,22 @@
     const municipalitySelect = getMunicipalitySelect();
     if (municipalitySelect) {
       municipalitySelect.addEventListener('change', onMunicipalityChange);
+      
+      // Track user interaction to prevent MutationObserver from interrupting
+      municipalitySelect.addEventListener('focus', function() {
+        isUserInteracting = true;
+      });
+      municipalitySelect.addEventListener('blur', function() {
+        isUserInteracting = false;
+      });
+      municipalitySelect.addEventListener('mousedown', function() {
+        isUserInteracting = true;
+      });
+      municipalitySelect.addEventListener('mouseup', function() {
+        setTimeout(function() {
+          isUserInteracting = false;
+        }, 100);
+      });
     }
 
     // Initial municipalities load is handled by loadDepartments(preselectDept, preselectCity).

@@ -806,7 +806,7 @@ class Ps_colombia_address extends Module
                     ],
                     [
                         'type' => 'file',
-                        'label' => $this->trans('Importar departamentos (states) CSV', [], 'Modules.PsColombiaAddress.Admin'),
+                        'label' => $this->trans('Importar municipios (ciudades) CSV', [], 'Modules.PsColombiaAddress.Admin'),
                         'name' => 'PS_COLOMBIA_ADDRESS_STATES_CSV_FILE',
                         'desc' => $this->trans(
                             'Sube un CSV con columnas: state_name,iso_code. Actualiza/crea departamentos de Colombia en la tabla de estados de PrestaShop.',
