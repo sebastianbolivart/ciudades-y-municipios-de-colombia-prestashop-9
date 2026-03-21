@@ -843,6 +843,22 @@
           setColombiaUiVisible(false);
         }
       });
+      
+      // Track user interaction to prevent MutationObserver from interrupting
+      countrySelect.addEventListener('focus', function() {
+        isUserInteracting = true;
+      });
+      countrySelect.addEventListener('blur', function() {
+        isUserInteracting = false;
+      });
+      countrySelect.addEventListener('mousedown', function() {
+        isUserInteracting = true;
+      });
+      countrySelect.addEventListener('mouseup', function() {
+        setTimeout(function() {
+          isUserInteracting = false;
+        }, 100);
+      });
     }
 
     const municipalitySelect = getMunicipalitySelect();
