@@ -956,24 +956,20 @@ class Ps_colombia_address extends Module
     private function tableExists(Db $db, string $tableName): bool
     {
         try {
-            // Get current database name
             $dbName = (string) $db->getValue('SELECT DATABASE()');
             if (empty($dbName)) {
                 return false;
             }
 
-            // Use INFORMATION_SCHEMA (compatible with MySQL 5.7+ and MariaDB 10.1+)
-            $sql = 'SELECT 1 FROM INFORMATION_SCHEMA.TABLES'
-                 . ' WHERE TABLE_SCHEMA = ' . pSQL($dbName)
-                 . ' AND TABLE_NAME = ' . pSQL($tableName)
-                 . ' LIMIT 1';
+            $sql = 'SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES'
+                 . ' WHERE TABLE_SCHEMA = \'' . pSQL($dbName) . '\''
+                 . ' AND TABLE_NAME = \'' . pSQL($tableName) . '\'';
 
-            return (bool) $db->getValue($sql);
+            return (int) $db->getValue($sql) > 0;
         } catch (\Exception $e) {
-            // Fallback for ancient MySQL/MariaDB versions
             try {
-                $result = $db->getValue('DESCRIBE `' . bqSQL($tableName) . '` LIMIT 1');
-                return (bool) $result;
+                $sql = 'SHOW TABLES LIKE \'' . pSQL($tableName) . '\'';
+                return (bool) $db->getValue($sql);
             } catch (\Exception $ex) {
                 return false;
             }
