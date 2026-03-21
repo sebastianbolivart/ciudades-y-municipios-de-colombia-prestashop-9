@@ -58,9 +58,9 @@
    */
   function getDepartmentSelect() {
     return (
-      document.querySelector('[data-colombia-department]') ||
       document.querySelector('select[name="id_state"]') ||
       document.querySelector('select[name="address[id_state]"]') ||
+      document.querySelector('[data-colombia-department]') ||
       document.querySelector('#id_state') ||
       null
     );
@@ -91,17 +91,30 @@
     return String(selected.textContent || '').trim();
   }
 
-  function getInitialDepartmentName() {
-    const dynamicSelect = getDynamicDepartmentSelect();
-    if (dynamicSelect && dynamicSelect.value) {
-      return String(dynamicSelect.value || '').trim();
+  function getDepartmentFieldName() {
+    const nativeSelect = getNativeDepartmentSelect();
+    if (nativeSelect && nativeSelect.name) {
+      return nativeSelect.name;
     }
 
-    const nativeSelect = getNativeDepartmentSelect();
-    if (!nativeSelect) return '';
-    if (!nativeSelect.value) return '';
+    const countrySelect = getCountrySelect();
+    if (countrySelect && countrySelect.name && countrySelect.name.indexOf('address[') === 0) {
+      return 'address[id_state]';
+    }
 
-    return getSelectedOptionText(nativeSelect);
+    return 'id_state';
+  }
+
+  function getInitialDepartmentSelection() {
+    const deptSelect = getDepartmentSelect();
+    if (!deptSelect) {
+      return { id: '', name: '' };
+    }
+
+    return {
+      id: String(deptSelect.value || '').trim(),
+      name: getSelectedOptionText(deptSelect),
+    };
   }
 
   function isColombiaSelected() {
@@ -117,6 +130,9 @@
   }
 
   function ensureDepartmentSelect() {
+    const nativeSelect = getNativeDepartmentSelect();
+    if (nativeSelect) return nativeSelect;
+
     let select = getDynamicDepartmentSelect();
     if (select) return select;
 
@@ -138,8 +154,8 @@
     inputCol.className = 'col-md-6 js-input-column';
 
     select = document.createElement('select');
-    select.id = 'colombia_department';
-    select.name = 'colombia_department';
+    select.id = 'id_state';
+    select.name = getDepartmentFieldName();
     select.className = 'form-control form-control-select';
     select.setAttribute('data-colombia-department', '1');
     select.appendChild(createOption('', '— Seleccione un departamento —'));
@@ -194,7 +210,13 @@
 
   function setNativeDepartmentVisible(visible) {
     const nativeSelect = getNativeDepartmentSelect();
-    if (!nativeSelect) return;
+    if (!nativeSelect) {
+      const dynamicGroup = getDynamicDepartmentGroup();
+      if (dynamicGroup && dynamicGroup.style) {
+        dynamicGroup.style.display = visible ? '' : 'none';
+      }
+      return;
+    }
 
     const nativeGroup = nativeSelect.closest('.form-group') || nativeSelect.parentNode;
     if (nativeGroup && nativeGroup.style) {
@@ -349,17 +371,53 @@
   const municipalitiesCache = Object.create(null);
   const departmentsCache = [];
 
+  function shouldHydrateFromSavedCity(savedCity) {
+    const deptSelect = getDepartmentSelect();
+    const municipalitySelect = getMunicipalitySelect();
+    if (!savedCity) return false;
+    if (!deptSelect) return true;
+    if (!deptSelect.value) return true;
+    if (!municipalitySelect) return false;
+    return !municipalitySelect.value;
+  }
+
+  function lookupMunicipality(savedCity) {
+    if (!savedCity) {
+      return Promise.resolve(null);
+    }
+
+    const url = new URL(CONFIG.baseUrl, window.location.href);
+    url.searchParams.set('lookup', 'municipality');
+    url.searchParams.set('municipality', savedCity);
+    url.searchParams.set('token', CONFIG.token);
+
+    return fetch(url.toString(), {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+      credentials: 'same-origin',
+    })
+      .then(function (response) {
+        if (!response.ok) {
+          return null;
+        }
+        return response.json();
+      })
+      .catch(function () {
+        return null;
+      });
+  }
+
   function loadDepartments(preselect, preselectMunicipality) {
     const deptSelect = ensureDepartmentSelect();
     if (!deptSelect) return;
 
-    preselect = preselect || '';
+    preselect = preselect || {};
     preselectMunicipality = preselectMunicipality || '';
 
     if (departmentsCache.length > 0) {
       populateDepartments(deptSelect, departmentsCache, preselect);
-      if (deptSelect.value) {
-        loadMunicipalities(deptSelect.value, preselectMunicipality);
+      if (getSelectedOptionText(deptSelect)) {
+        loadMunicipalities(getSelectedOptionText(deptSelect), preselectMunicipality);
       }
       return;
     }
@@ -395,8 +453,8 @@
         populateDepartments(deptSelect, data.departments, preselect);
         deptSelect.disabled = false;
 
-        if (deptSelect.value) {
-          loadMunicipalities(deptSelect.value, preselectMunicipality);
+        if (getSelectedOptionText(deptSelect)) {
+          loadMunicipalities(getSelectedOptionText(deptSelect), preselectMunicipality);
         }
       })
       .catch(function (err) {
@@ -411,8 +469,15 @@
     selectEl.innerHTML = '';
     selectEl.appendChild(createOption('', '— Seleccione un departamento —'));
 
-    departments.forEach(function (departmentName) {
-      selectEl.appendChild(createOption(departmentName, departmentName, departmentName === preselect));
+    departments.forEach(function (department) {
+      const id = String((department && department.id) || '');
+      const name = String((department && department.name) || '');
+      const isSelected = (
+        (preselect.id && id === String(preselect.id)) ||
+        (preselect.name && name === String(preselect.name))
+      );
+
+      selectEl.appendChild(createOption(id, name, isSelected));
     });
   }
 
@@ -665,7 +730,7 @@
     const colombia = isColombiaSelected();
     const cityField = getCityField();
     const preselectedCity = cityField ? String(cityField.value || '').trim() : '';
-    const preselectedDepartment = getInitialDepartmentName();
+    const preselectedDepartment = getInitialDepartmentSelection();
 
     if (!colombia) {
       setNativeDepartmentVisible(true);
@@ -673,20 +738,45 @@
       return;
     }
 
-    setNativeDepartmentVisible(false);
+    setNativeDepartmentVisible(true);
     setColombiaUiVisible(true);
 
     const deptSelect = ensureDepartmentSelect();
 
     if (!deptSelect) return;
 
+    const runInitialHydration = function () {
+      if (preselectedDepartment && (preselectedDepartment.id || preselectedDepartment.name)) {
+        loadDepartments(preselectedDepartment, preselectedCity);
+        return;
+      }
+
+      if (!shouldHydrateFromSavedCity(preselectedCity)) {
+        return;
+      }
+
+      lookupMunicipality(preselectedCity).then(function (data) {
+        if (!data || !data.department) {
+          return;
+        }
+
+        loadDepartments({
+          id: String(data.state_id || ''),
+          name: String(data.department || ''),
+        }, String(data.municipality || preselectedCity || ''));
+      });
+    };
+
     // Avoid double-binding AND prevent infinite loop caused by MutationObserver:
     // loadDepartments() modifies the DOM (options), which would re-trigger the
     // observer → init() → loadDepartments() → observer → ... freeze.
-    if (deptSelect.dataset.colombiaInit === '1') return;
+    if (deptSelect.dataset.colombiaInit === '1') {
+      runInitialHydration();
+      return;
+    }
     deptSelect.dataset.colombiaInit = '1';
 
-    loadDepartments(preselectedDepartment, preselectedCity);
+    runInitialHydration();
 
     deptSelect.addEventListener('change', onDepartmentChange);
 
@@ -694,9 +784,9 @@
       countrySelect.dataset.colombiaInit = '1';
       countrySelect.addEventListener('change', function () {
         if (isColombiaSelected()) {
-          setNativeDepartmentVisible(false);
+          setNativeDepartmentVisible(true);
           setColombiaUiVisible(true);
-          loadDepartments();
+          loadDepartments(getInitialDepartmentSelection(), (getCityField() || {}).value || '');
           init();
         } else {
           setNativeDepartmentVisible(true);

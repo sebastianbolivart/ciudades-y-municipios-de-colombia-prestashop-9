@@ -62,15 +62,23 @@ class Ps_colombia_addressMunicipalitiesModuleFrontController extends ModuleFront
         if ($mode === 'departments') {
             try {
                 $rows = Db::getInstance()->executeS(
-                    'SELECT DISTINCT `department` FROM `' . bqSQL(_DB_PREFIX_ . 'colombia_municipality') . '` ORDER BY `department` ASC'
+                    'SELECT s.`id_state`, s.`name`
+                       FROM `' . bqSQL(_DB_PREFIX_ . 'state') . '` s
+                       INNER JOIN `' . bqSQL(_DB_PREFIX_ . 'country') . '` c ON c.`id_country` = s.`id_country`
+                      WHERE c.`iso_code` = \'CO\'
+                   ORDER BY s.`name` ASC'
                 );
 
                 $departments = [];
                 if (is_array($rows)) {
                     foreach ($rows as $row) {
-                        $name = trim((string) ($row['department'] ?? ''));
+                        $name = trim((string) ($row['name'] ?? ''));
+                        $idState = (int) ($row['id_state'] ?? 0);
                         if ($name !== '') {
-                            $departments[] = $name;
+                            $departments[] = [
+                                'id' => $idState,
+                                'name' => $name,
+                            ];
                         }
                     }
                 }
@@ -85,6 +93,49 @@ class Ps_colombia_addressMunicipalitiesModuleFrontController extends ModuleFront
             header('Cache-Control: public, max-age=600, s-maxage=3600');
             header('Vary: Accept-Encoding');
             $this->jsonSuccess(['departments' => $departments]);
+        }
+
+        $lookup = Tools::strtolower((string) Tools::getValue('lookup', ''));
+
+        if ($lookup === 'municipality') {
+            $rawMunicipality = (string) Tools::getValue('municipality', '');
+            $municipality = $this->sanitiseDepartment($rawMunicipality);
+
+            if ($municipality === '') {
+                $this->jsonError('Missing or invalid "municipality" parameter.', 400);
+            }
+
+            try {
+                $row = Db::getInstance()->getRow(
+                    'SELECT m.`department`, m.`municipality`, m.`postal_code`, m.`dane_code`, m.`latitude`, m.`longitude`, s.`id_state`
+                       FROM `' . bqSQL(_DB_PREFIX_ . 'colombia_municipality') . '` m
+                       LEFT JOIN `' . bqSQL(_DB_PREFIX_ . 'state') . '` s ON s.`name` = m.`department`
+                       LEFT JOIN `' . bqSQL(_DB_PREFIX_ . 'country') . '` c ON c.`id_country` = s.`id_country` AND c.`iso_code` = \'CO\'
+                      WHERE `municipality` = \'' . pSQL($municipality) . '\''
+                );
+            } catch (\Throwable $e) {
+                PrestaShopLogger::addLog(
+                    '[ps_colombia_address] AJAX municipality lookup error: ' . $e->getMessage(),
+                    3
+                );
+                $this->jsonError('Internal server error.', 500);
+            }
+
+            if (!is_array($row) || empty($row['department'])) {
+                $this->jsonError('Municipality not found.', 404);
+            }
+
+            header('Cache-Control: public, max-age=600, s-maxage=3600');
+            header('Vary: Accept-Encoding');
+            $this->jsonSuccess([
+                'state_id' => (int) ($row['id_state'] ?? 0),
+                'department' => (string) ($row['department'] ?? ''),
+                'municipality' => (string) ($row['municipality'] ?? ''),
+                'postal_code' => (string) ($row['postal_code'] ?? ''),
+                'dane_code' => (string) ($row['dane_code'] ?? ''),
+                'latitude' => (string) ($row['latitude'] ?? ''),
+                'longitude' => (string) ($row['longitude'] ?? ''),
+            ]);
         }
 
         // Sanitise and validate the department parameter.
