@@ -216,7 +216,20 @@ class Ps_colombia_address extends Module
             return;
         }
 
-        $this->context->controller->addJS($this->_path . 'views/js/checkout.js');
+        $checkoutJsPath = $this->_path . 'views/js/checkout.js?v=' . rawurlencode((string) $this->version);
+
+        if (method_exists($this->context->controller, 'registerJavascript')) {
+            $this->context->controller->registerJavascript(
+                'module-ps-colombia-address-checkout',
+                $checkoutJsPath,
+                [
+                    'position' => 'bottom',
+                    'priority' => 200,
+                ]
+            );
+        } else {
+            $this->context->controller->addJS($checkoutJsPath);
+        }
 
         // Token for AJAX request validation.
         $token = Tools::getToken(false);

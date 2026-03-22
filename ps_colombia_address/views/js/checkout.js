@@ -505,6 +505,12 @@
     init();
   }
 
+  function hasDepartmentAndMunicipalityControls() {
+    const deptSelect = getDepartmentSelect();
+    const citySelect = getCityMunicipalitySelect();
+    return Boolean(deptSelect && citySelect);
+  }
+
   function scheduleInitRetry(delayMs) {
     if (pendingInitRetryTimer !== null) {
       return;
@@ -912,6 +918,27 @@
   // Some production themes inject/update address fields after first paint.
   // Run one delayed init pass to ensure hydration on edit forms.
   setTimeout(init, 350);
+
+  // Watchdog for asynchronous/late-rendered address forms in production themes.
+  // Retries a few times to guarantee both department and municipality controls exist.
+  (function bootstrapWatchdog() {
+    let attempts = 0;
+    const maxAttempts = 18;
+    const timer = setInterval(function () {
+      attempts += 1;
+
+      if (hasDepartmentAndMunicipalityControls()) {
+        clearInterval(timer);
+        return;
+      }
+
+      triggerReinit();
+
+      if (attempts >= maxAttempts) {
+        clearInterval(timer);
+      }
+    }, 250);
+  }());
 
   // PrestaShop fires this custom event after checkout sections are refreshed.
   document.addEventListener('updatedAddressForm', triggerReinit);
