@@ -38,7 +38,7 @@ declare(strict_types=1);
 /**
  * PrestaShop front module controller auto-loaded by FrontController.
  */
-class PsColombiaAddressMunicipalitiesModuleFrontController extends ModuleFrontController
+class ps_colombia_addressmunicipalitiesModuleFrontController extends ModuleFrontController
 {
     /** Max length accepted for the department parameter. */
     private const MAX_DEPT_LENGTH = 120;
@@ -293,4 +293,8 @@ class PsColombiaAddressMunicipalitiesModuleFrontController extends ModuleFrontCo
         echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
         exit;
     }
+}
+
+if (!class_exists('PsColombiaAddressMunicipalitiesModuleFrontController', false)) {
+    class_alias('ps_colombia_addressmunicipalitiesModuleFrontController', 'PsColombiaAddressMunicipalitiesModuleFrontController');
 }
