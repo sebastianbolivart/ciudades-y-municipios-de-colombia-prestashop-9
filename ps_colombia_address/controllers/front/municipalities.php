@@ -62,15 +62,17 @@ class PsColombiaAddressMunicipalitiesModuleFrontController extends ModuleFrontCo
         if ($mode === 'departments') {
             try {
                 $stateTable = _DB_PREFIX_ . 'state';
-                $countryTable = _DB_PREFIX_ . 'country';
+                $colombiaCountryId = $this->getColombiaCountryId();
 
-                $rows = Db::getInstance()->executeS(
-                    'SELECT s.`id_state`, s.`name`
-                       FROM `' . $stateTable . '` s
-                       INNER JOIN `' . $countryTable . '` c ON c.`id_country` = s.`id_country`
-                      WHERE c.`iso_code` = \'CO\'
-                   ORDER BY s.`name` ASC'
-                );
+                $rows = [];
+                if ($colombiaCountryId > 0) {
+                    $rows = Db::getInstance()->executeS(
+                        'SELECT s.`id_state`, s.`name`
+                           FROM `' . $stateTable . '` s
+                          WHERE s.`id_country` = ' . $colombiaCountryId . '
+                       ORDER BY s.`name` ASC'
+                    );
+                }
 
                 if (!is_array($rows) || empty($rows)) {
                     $municipalityTable = _DB_PREFIX_ . 'colombia_municipality';
@@ -131,16 +133,17 @@ class PsColombiaAddressMunicipalitiesModuleFrontController extends ModuleFrontCo
                 $stateId = 0;
                 if (is_array($row) && !empty($row['department'])) {
                     $stateTable = _DB_PREFIX_ . 'state';
-                    $countryTable = _DB_PREFIX_ . 'country';
+                                        $colombiaCountryId = $this->getColombiaCountryId();
                         $departmentSql = $this->quoteSqlString((string) $row['department']) . ' COLLATE utf8mb4_unicode_ci';
-                    $stateId = (int) Db::getInstance()->getValue(
-                        'SELECT s.`id_state`
-                           FROM `' . $stateTable . '` s
-                           INNER JOIN `' . $countryTable . '` c ON c.`id_country` = s.`id_country`
-                          WHERE c.`iso_code` = \'CO\'
-                            AND s.`name` COLLATE utf8mb4_unicode_ci = ' . $departmentSql . '
-                          LIMIT 1'
-                    );
+                                        if ($colombiaCountryId > 0) {
+                                                $stateId = (int) Db::getInstance()->getValue(
+                                                        'SELECT s.`id_state`
+                                                             FROM `' . $stateTable . '` s
+                                                            WHERE s.`id_country` = ' . $colombiaCountryId . '
+                                                                AND s.`name` COLLATE utf8mb4_unicode_ci = ' . $departmentSql . '
+                                                            LIMIT 1'
+                                                );
+                                        }
                     $row['id_state'] = $stateId;
                 }
             } catch (\Throwable $e) {
@@ -250,6 +253,16 @@ class PsColombiaAddressMunicipalitiesModuleFrontController extends ModuleFrontCo
     private function quoteSqlString(string $value): string
     {
         return '\'' . pSQL($value, true) . '\'';
+    }
+
+    private function getColombiaCountryId(): int
+    {
+        return (int) Db::getInstance()->getValue(
+            'SELECT `id_country`
+               FROM `' . _DB_PREFIX_ . 'country`
+              WHERE `iso_code` = \'CO\'
+              LIMIT 1'
+        );
     }
 
     /**
