@@ -61,14 +61,16 @@ class PsColombiaAddressMunicipalitiesModuleFrontController extends ModuleFrontCo
 
         if ($mode === 'departments') {
             try {
-                $query = new DbQuery();
-                $query->select('s.`id_state`, s.`name`');
-                $query->from('state', 's');
-                $query->innerJoin('country', 'c', 'c.`id_country` = s.`id_country`');
-                $query->where('c.`iso_code` = \'CO\'');
-                $query->orderBy('s.`name` ASC');
+                $stateTable = bqSQL(_DB_PREFIX_ . 'state');
+                $countryTable = bqSQL(_DB_PREFIX_ . 'country');
 
-                $rows = Db::getInstance()->executeS((string) $query);
+                $rows = Db::getInstance()->executeS(
+                    'SELECT s.`id_state`, s.`name`
+                       FROM `' . $stateTable . '` s
+                       INNER JOIN `' . $countryTable . '` c ON c.`id_country` = s.`id_country`
+                      WHERE c.`iso_code` = \'CO\'
+                   ORDER BY s.`name` ASC'
+                );
 
                 $departments = [];
                 if (is_array($rows)) {
