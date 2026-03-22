@@ -110,16 +110,27 @@ class PsColombiaAddressMunicipalitiesModuleFrontController extends ModuleFrontCo
 
             try {
                 $municipalityTable = _DB_PREFIX_ . 'colombia_municipality';
-                $stateTable = _DB_PREFIX_ . 'state';
-                $countryTable = _DB_PREFIX_ . 'country';
 
                 $row = Db::getInstance()->getRow(
-                    'SELECT m.`department`, m.`municipality`, m.`postal_code`, m.`dane_code`, m.`latitude`, m.`longitude`, s.`id_state`
+                    'SELECT m.`department`, m.`municipality`, m.`postal_code`, m.`dane_code`, m.`latitude`, m.`longitude`
                        FROM `' . $municipalityTable . '` m
-                       LEFT JOIN `' . $stateTable . '` s ON s.`name` = m.`department`
-                       LEFT JOIN `' . $countryTable . '` c ON c.`id_country` = s.`id_country` AND c.`iso_code` = \'CO\'
                       WHERE m.`municipality` = ' . $this->quoteSqlString($municipality)
                 );
+
+                $stateId = 0;
+                if (is_array($row) && !empty($row['department'])) {
+                    $stateTable = _DB_PREFIX_ . 'state';
+                    $countryTable = _DB_PREFIX_ . 'country';
+                    $stateId = (int) Db::getInstance()->getValue(
+                        'SELECT s.`id_state`
+                           FROM `' . $stateTable . '` s
+                           INNER JOIN `' . $countryTable . '` c ON c.`id_country` = s.`id_country`
+                          WHERE c.`iso_code` = \'CO\'
+                            AND s.`name` = ' . $this->quoteSqlString((string) $row['department']) . '
+                          LIMIT 1'
+                    );
+                    $row['id_state'] = $stateId;
+                }
             } catch (\Throwable $e) {
                 PrestaShopLogger::addLog(
                     '[ps_colombia_address] AJAX municipality lookup error: ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine(),
