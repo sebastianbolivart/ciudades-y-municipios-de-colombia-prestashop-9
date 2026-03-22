@@ -465,6 +465,7 @@
   const departmentsCache = [];
   const SELECT_INTERACTION_LOCK_MS = 700;
   let selectInteractionLockUntil = 0;
+  let pendingInitRetryTimer = null;
 
   function isAddressSelectElement(el) {
     if (!el || el.tagName !== 'SELECT') {
@@ -502,6 +503,17 @@
     }
 
     init();
+  }
+
+  function scheduleInitRetry(delayMs) {
+    if (pendingInitRetryTimer !== null) {
+      return;
+    }
+
+    pendingInitRetryTimer = setTimeout(function () {
+      pendingInitRetryTimer = null;
+      triggerReinit();
+    }, delayMs);
   }
 
   function shouldHydrateFromSavedCity(savedCity) {
@@ -781,6 +793,13 @@
     const colombia = isColombiaSelected();
 
     if (!countrySelect || colombia === null) {
+      // Theme/checkout may render country select asynchronously.
+      // Keep controls available and retry shortly instead of hiding them.
+      setNativeDepartmentVisible(true);
+      setColombiaUiVisible(true);
+      ensureDepartmentSelect();
+      getMunicipalitySelect();
+      scheduleInitRetry(250);
       return;
     }
 
@@ -873,7 +892,8 @@
     }
 
     const municipalitySelect = getMunicipalitySelect();
-    if (municipalitySelect) {
+    if (municipalitySelect && municipalitySelect.dataset.colombiaMuniBound !== '1') {
+      municipalitySelect.dataset.colombiaMuniBound = '1';
       municipalitySelect.addEventListener('change', onMunicipalityChange);
     }
 
