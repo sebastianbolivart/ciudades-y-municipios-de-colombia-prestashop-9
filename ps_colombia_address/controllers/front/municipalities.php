@@ -61,24 +61,25 @@ class ps_colombia_addressmunicipalitiesModuleFrontController extends ModuleFront
 
         if ($mode === 'departments') {
             try {
-                $stateTable = _DB_PREFIX_ . 'state';
+                $db = Db::getInstance();
+                $stateTable = $this->resolveSqlTableName($db, 'state');
                 $colombiaCountryId = $this->getColombiaCountryId();
 
                 $rows = [];
                 if ($colombiaCountryId > 0) {
-                    $rows = Db::getInstance()->executeS(
+                    $rows = $db->executeS(
                         'SELECT s.`id_state`, s.`name`
-                           FROM `' . $stateTable . '` s
+                           FROM `' . bqSQL($stateTable) . '` s
                           WHERE s.`id_country` = ' . $colombiaCountryId . '
                        ORDER BY s.`name` ASC'
                     );
                 }
 
                 if (!is_array($rows) || empty($rows)) {
-                    $municipalityTable = _DB_PREFIX_ . 'colombia_municipality';
-                    $rows = Db::getInstance()->executeS(
+                    $municipalityTable = $this->resolveSqlTableName($db, 'colombia_municipality');
+                    $rows = $db->executeS(
                         'SELECT DISTINCT 0 AS `id_state`, `department` AS `name`
-                           FROM `' . $municipalityTable . '`
+                           FROM `' . bqSQL($municipalityTable) . '`
                           WHERE `department` <> \'\'
                        ORDER BY `department` ASC'
                     );
@@ -121,29 +122,30 @@ class ps_colombia_addressmunicipalitiesModuleFrontController extends ModuleFront
             }
 
             try {
-                $municipalityTable = _DB_PREFIX_ . 'colombia_municipality';
+                $db = Db::getInstance();
+                $municipalityTable = $this->resolveSqlTableName($db, 'colombia_municipality');
                 $municipalitySql = $this->quoteSqlString($municipality) . ' COLLATE utf8mb4_unicode_ci';
 
-                $row = Db::getInstance()->getRow(
+                $row = $db->getRow(
                     'SELECT m.`department`, m.`municipality`, m.`postal_code`, m.`dane_code`, m.`latitude`, m.`longitude`
-                       FROM `' . $municipalityTable . '` m
+                       FROM `' . bqSQL($municipalityTable) . '` m
                       WHERE m.`municipality` COLLATE utf8mb4_unicode_ci = ' . $municipalitySql
                 );
 
                 $stateId = 0;
                 if (is_array($row) && !empty($row['department'])) {
-                    $stateTable = _DB_PREFIX_ . 'state';
-                                        $colombiaCountryId = $this->getColombiaCountryId();
-                        $departmentSql = $this->quoteSqlString((string) $row['department']) . ' COLLATE utf8mb4_unicode_ci';
-                                        if ($colombiaCountryId > 0) {
-                                                $stateId = (int) Db::getInstance()->getValue(
-                                                        'SELECT s.`id_state`
-                                                             FROM `' . $stateTable . '` s
-                                                            WHERE s.`id_country` = ' . $colombiaCountryId . '
-                                                                AND s.`name` COLLATE utf8mb4_unicode_ci = ' . $departmentSql . '
-                                                            LIMIT 1'
-                                                );
-                                        }
+                    $stateTable = $this->resolveSqlTableName($db, 'state');
+                    $colombiaCountryId = $this->getColombiaCountryId();
+                    $departmentSql = $this->quoteSqlString((string) $row['department']) . ' COLLATE utf8mb4_unicode_ci';
+                    if ($colombiaCountryId > 0) {
+                        $stateId = (int) $db->getValue(
+                            'SELECT s.`id_state`
+                               FROM `' . bqSQL($stateTable) . '` s
+                              WHERE s.`id_country` = ' . $colombiaCountryId . '
+                                AND s.`name` COLLATE utf8mb4_unicode_ci = ' . $departmentSql . '
+                              LIMIT 1'
+                        );
+                    }
                     $row['id_state'] = $stateId;
                 }
             } catch (\Throwable $e) {
@@ -181,12 +183,13 @@ class ps_colombia_addressmunicipalitiesModuleFrontController extends ModuleFront
 
         // Fetch municipalities directly via DB (same pattern as departments endpoint).
         try {
-            $municipalityTable = _DB_PREFIX_ . 'colombia_municipality';
+                $db = Db::getInstance();
+                $municipalityTable = $this->resolveSqlTableName($db, 'colombia_municipality');
             $departmentSql = $this->quoteSqlString($department) . ' COLLATE utf8mb4_unicode_ci';
 
-            $rows = Db::getInstance()->executeS(
+                $rows = $db->executeS(
                 'SELECT `municipality`, `postal_code`, `dane_code`, `latitude`, `longitude`
-                   FROM `' . $municipalityTable . '`
+                         FROM `' . bqSQL($municipalityTable) . '`
                   WHERE `department` COLLATE utf8mb4_unicode_ci = ' . $departmentSql . '
                ORDER BY `municipality` ASC'
             );
@@ -257,12 +260,50 @@ class ps_colombia_addressmunicipalitiesModuleFrontController extends ModuleFront
 
     private function getColombiaCountryId(): int
     {
+        $db = Db::getInstance();
+        $countryTable = $this->resolveSqlTableName($db, 'country');
+
         return (int) Db::getInstance()->getValue(
             'SELECT `id_country`
-               FROM `' . _DB_PREFIX_ . 'country`
+               FROM `' . bqSQL($countryTable) . '`
               WHERE `iso_code` = \'CO\'
               LIMIT 1'
         );
+    }
+
+    private function resolveSqlTableName(Db $db, string $table): string
+    {
+        $prefixed = _DB_PREFIX_ . $table;
+
+        if ($this->tableExists($db, $prefixed)) {
+            return $prefixed;
+        }
+
+        if ($this->tableExists($db, $table)) {
+            return $table;
+        }
+
+        return $prefixed;
+    }
+
+    private function tableExists(Db $db, string $tableName): bool
+    {
+        try {
+            $dbName = (string) $db->getValue('SELECT DATABASE()');
+            if ($dbName === '') {
+                return false;
+            }
+
+            $rows = $db->executeS(
+                'SELECT 1 FROM INFORMATION_SCHEMA.TABLES'
+                . ' WHERE TABLE_SCHEMA = ' . $this->quoteSqlString($dbName)
+                . ' AND TABLE_NAME = ' . $this->quoteSqlString($tableName)
+            );
+
+            return is_array($rows) && !empty($rows);
+        } catch (\Throwable $e) {
+            return false;
+        }
     }
 
     /**
