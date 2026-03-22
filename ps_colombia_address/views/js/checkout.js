@@ -456,9 +456,23 @@
   /** In-memory cache to avoid duplicate AJAX calls per page load. */
   const municipalitiesCache = Object.create(null);
   const departmentsCache = [];
-  
-  /** Flag to track if user is actively interacting with selects */
-  let isUserInteracting = false;
+
+  function isAddressSelectFocused() {
+    const active = document.activeElement;
+    if (!active || active.tagName !== 'SELECT') {
+      return false;
+    }
+
+    return Boolean(
+      active.matches('select[name="id_country"]') ||
+      active.matches('select[name="address[id_country]"]') ||
+      active.matches('select[name="id_state"]') ||
+      active.matches('select[name="address[id_state]"]') ||
+      active.matches('[data-colombia-city-select]') ||
+      active.id === 'id_country' ||
+      active.id === 'id_state'
+    );
+  }
 
   function shouldHydrateFromSavedCity(savedCity) {
     const deptSelect = getDepartmentSelect();
@@ -733,11 +747,6 @@
    * Safe to call multiple times (e.g. after checkout AJAX refresh).
    */
   function init() {
-    // Skip init if user is currently interacting with form selects
-    if (isUserInteracting) {
-      return;
-    }
-    
     const countrySelect = getCountrySelect();
     const colombia = isColombiaSelected();
     const cityField = getCityField();
@@ -808,23 +817,6 @@
     runInitialHydration();
 
     deptSelect.addEventListener('change', onDepartmentChange);
-    
-    // Track user interaction to prevent MutationObserver from interrupting
-    deptSelect.addEventListener('focus', function() {
-      isUserInteracting = true;
-    });
-    deptSelect.addEventListener('blur', function() {
-      isUserInteracting = false;
-    });
-    deptSelect.addEventListener('mousedown', function() {
-      isUserInteracting = true;
-    });
-    deptSelect.addEventListener('mouseup', function() {
-      // Re-enable init after a brief delay to allow dropdown to stabilize
-      setTimeout(function() {
-        isUserInteracting = false;
-      }, 100);
-    });
 
     if (countrySelect && countrySelect.dataset.colombiaInit !== '1') {
       countrySelect.dataset.colombiaInit = '1';
@@ -843,43 +835,11 @@
           setColombiaUiVisible(false);
         }
       });
-      
-      // Track user interaction to prevent MutationObserver from interrupting
-      countrySelect.addEventListener('focus', function() {
-        isUserInteracting = true;
-      });
-      countrySelect.addEventListener('blur', function() {
-        isUserInteracting = false;
-      });
-      countrySelect.addEventListener('mousedown', function() {
-        isUserInteracting = true;
-      });
-      countrySelect.addEventListener('mouseup', function() {
-        setTimeout(function() {
-          isUserInteracting = false;
-        }, 100);
-      });
     }
 
     const municipalitySelect = getMunicipalitySelect();
     if (municipalitySelect) {
       municipalitySelect.addEventListener('change', onMunicipalityChange);
-      
-      // Track user interaction to prevent MutationObserver from interrupting
-      municipalitySelect.addEventListener('focus', function() {
-        isUserInteracting = true;
-      });
-      municipalitySelect.addEventListener('blur', function() {
-        isUserInteracting = false;
-      });
-      municipalitySelect.addEventListener('mousedown', function() {
-        isUserInteracting = true;
-      });
-      municipalitySelect.addEventListener('mouseup', function() {
-        setTimeout(function() {
-          isUserInteracting = false;
-        }, 100);
-      });
     }
 
     // Initial municipalities load is handled by loadDepartments(preselectDept, preselectCity).
@@ -894,6 +854,10 @@
     init();
   }
 
+  // Some production themes inject/update address fields after first paint.
+  // Run one delayed init pass to ensure hydration on edit forms.
+  setTimeout(init, 350);
+
   // PrestaShop fires this custom event after checkout sections are refreshed.
   document.addEventListener('updatedAddressForm', init);
   document.addEventListener('addressFormUpdated', init);
@@ -905,6 +869,9 @@
   if (formHost && typeof MutationObserver !== 'undefined') {
     let mutationDebounceTimer = null;
     const observer = new MutationObserver(function () {
+      if (isAddressSelectFocused()) {
+        return;
+      }
       clearTimeout(mutationDebounceTimer);
       mutationDebounceTimer = setTimeout(init, 150);
     });
