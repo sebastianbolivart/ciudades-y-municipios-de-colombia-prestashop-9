@@ -458,6 +458,36 @@
     return opt;
   }
 
+  function parseJsonResponse(response) {
+    return response.text().then(function (body) {
+      const raw = String(body || '');
+
+      try {
+        return JSON.parse(raw);
+      } catch (firstError) {
+        const objectStart = raw.indexOf('{');
+        const arrayStart = raw.indexOf('[');
+        let start = -1;
+
+        if (objectStart !== -1 && arrayStart !== -1) {
+          start = Math.min(objectStart, arrayStart);
+        } else {
+          start = objectStart !== -1 ? objectStart : arrayStart;
+        }
+
+        const objectEnd = raw.lastIndexOf('}');
+        const arrayEnd = raw.lastIndexOf(']');
+        const end = Math.max(objectEnd, arrayEnd);
+
+        if (start === -1 || end === -1 || end < start) {
+          throw firstError;
+        }
+
+        return JSON.parse(raw.slice(start, end + 1));
+      }
+    });
+  }
+
   // ── State ──────────────────────────────────────────────────────────────
 
   /** In-memory cache to avoid duplicate AJAX calls per page load. */
@@ -551,7 +581,7 @@
         if (!response.ok) {
           return null;
         }
-        return response.json();
+        return parseJsonResponse(response);
       })
       .catch(function () {
         return null;
@@ -592,7 +622,7 @@
             throw new Error('HTTP ' + response.status + ' - ' + body);
           });
         }
-        return response.json();
+        return parseJsonResponse(response);
       })
       .then(function (data) {
         if (!data || !Array.isArray(data.departments)) {
@@ -673,7 +703,7 @@
         if (!response.ok) {
           throw new Error('HTTP ' + response.status);
         }
-        return response.json();
+        return parseJsonResponse(response);
       })
       .then(function (data) {
         if (!data || !Array.isArray(data.municipalities)) {
