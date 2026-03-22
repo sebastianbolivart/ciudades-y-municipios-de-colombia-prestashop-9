@@ -38,7 +38,7 @@ declare(strict_types=1);
 /**
  * PrestaShop front module controller auto-loaded by FrontController.
  */
-class Ps_colombia_addressMunicipalitiesModuleFrontController extends ModuleFrontController
+class PsColombiaAddressMunicipalitiesModuleFrontController extends ModuleFrontController
 {
     /** Max length accepted for the department parameter. */
     private const MAX_DEPT_LENGTH = 120;
@@ -61,13 +61,14 @@ class Ps_colombia_addressMunicipalitiesModuleFrontController extends ModuleFront
 
         if ($mode === 'departments') {
             try {
-                $rows = Db::getInstance()->executeS(
-                    'SELECT s.`id_state`, s.`name`
-                       FROM `' . bqSQL(_DB_PREFIX_ . 'state') . '` s
-                       INNER JOIN `' . bqSQL(_DB_PREFIX_ . 'country') . '` c ON c.`id_country` = s.`id_country`
-                      WHERE c.`iso_code` = \'CO\'
-                   ORDER BY s.`name` ASC'
-                );
+                $query = new DbQuery();
+                $query->select('s.`id_state`, s.`name`');
+                $query->from('state', 's');
+                $query->innerJoin('country', 'c', 'c.`id_country` = s.`id_country`');
+                $query->where('c.`iso_code` = \'CO\'');
+                $query->orderBy('s.`name` ASC');
+
+                $rows = Db::getInstance()->executeS((string) $query);
 
                 $departments = [];
                 if (is_array($rows)) {
@@ -106,14 +107,17 @@ class Ps_colombia_addressMunicipalitiesModuleFrontController extends ModuleFront
             }
 
             try {
-                $query = new DbQuery();
-                $query->select('m.`department`, m.`municipality`, m.`postal_code`, m.`dane_code`, m.`latitude`, m.`longitude`, s.`id_state`');
-                $query->from('colombia_municipality', 'm');
-                $query->leftJoin('state', 's', 's.`name` = m.`department`');
-                $query->leftJoin('country', 'c', 'c.`id_country` = s.`id_country` AND c.`iso_code` = \'CO\'');
-                $query->where('m.`municipality` = ' . $this->quoteSqlString($municipality));
+                $municipalityTable = bqSQL(_DB_PREFIX_ . 'colombia_municipality');
+                $stateTable = bqSQL(_DB_PREFIX_ . 'state');
+                $countryTable = bqSQL(_DB_PREFIX_ . 'country');
 
-                $row = Db::getInstance()->getRow((string) $query);
+                $row = Db::getInstance()->getRow(
+                    'SELECT m.`department`, m.`municipality`, m.`postal_code`, m.`dane_code`, m.`latitude`, m.`longitude`, s.`id_state`
+                       FROM `' . $municipalityTable . '` m
+                       LEFT JOIN `' . $stateTable . '` s ON s.`name` = m.`department`
+                       LEFT JOIN `' . $countryTable . '` c ON c.`id_country` = s.`id_country` AND c.`iso_code` = \'CO\'
+                      WHERE m.`municipality` = ' . $this->quoteSqlString($municipality)
+                );
             } catch (\Throwable $e) {
                 PrestaShopLogger::addLog(
                     '[ps_colombia_address] AJAX municipality lookup error: ' . $e->getMessage(),
@@ -149,13 +153,14 @@ class Ps_colombia_addressMunicipalitiesModuleFrontController extends ModuleFront
 
         // Fetch municipalities directly via DB (same pattern as departments endpoint).
         try {
-            $query = new DbQuery();
-            $query->select('`municipality`, `postal_code`, `dane_code`, `latitude`, `longitude`');
-            $query->from('colombia_municipality');
-            $query->where('`department` = ' . $this->quoteSqlString($department));
-            $query->orderBy('`municipality` ASC');
+            $municipalityTable = bqSQL(_DB_PREFIX_ . 'colombia_municipality');
 
-            $rows = Db::getInstance()->executeS((string) $query);
+            $rows = Db::getInstance()->executeS(
+                'SELECT `municipality`, `postal_code`, `dane_code`, `latitude`, `longitude`
+                   FROM `' . $municipalityTable . '`
+                  WHERE `department` = ' . $this->quoteSqlString($department) . '
+               ORDER BY `municipality` ASC'
+            );
 
             $municipalities = [];
             if (is_array($rows)) {
