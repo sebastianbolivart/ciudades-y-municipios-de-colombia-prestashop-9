@@ -205,14 +205,20 @@
 
   function isColombiaSelected() {
     const countrySelect = getCountrySelect();
-    if (!countrySelect) return false;
+    if (!countrySelect) return null;
 
     const selected = countrySelect.options[countrySelect.selectedIndex];
     const code = (selected && selected.dataset && selected.dataset.isoCode) ? String(selected.dataset.isoCode).toUpperCase() : '';
     const text = selected ? String(selected.textContent || '').trim().toLowerCase() : '';
-    const value = countrySelect.value;
+    const value = String(countrySelect.value || '');
+    const colombiaCountryId = CONFIG && CONFIG.colombiaCountryId ? String(CONFIG.colombiaCountryId) : '';
 
-    return code === 'CO' || value === '69' || text === 'colombia';
+    return (
+      code === 'CO' ||
+      (colombiaCountryId !== '' && value === colombiaCountryId) ||
+      value === '69' ||
+      text.indexOf('colombia') !== -1
+    );
   }
 
   function ensureDepartmentSelect() {
@@ -285,8 +291,9 @@
     }
 
     if (cityField) {
-      cityField.style.display = visible ? 'none' : '';
-      cityField.disabled = !!visible;
+      const canHideCityField = !visible || Boolean(citySelect);
+      cityField.style.display = (visible && canHideCityField) ? 'none' : '';
+      cityField.disabled = (visible && canHideCityField);
     }
     if (citySelect) {
       citySelect.style.display = visible ? '' : 'none';
@@ -736,7 +743,7 @@
    * @param {Event} event
    */
   function onDepartmentChange(event) {
-    if (!isColombiaSelected()) {
+    if (isColombiaSelected() !== true) {
       return;
     }
 
@@ -772,6 +779,11 @@
   function init() {
     const countrySelect = getCountrySelect();
     const colombia = isColombiaSelected();
+
+    if (!countrySelect || colombia === null) {
+      return;
+    }
+
     const cityField = getCityField();
     const preselectedCity = cityField ? String(cityField.value || '').trim() : '';
     const preselectedDepartment = getInitialDepartmentSelection();
@@ -849,7 +861,7 @@
           delete departmentSelect.dataset.colombiaHydrationKey;
         }
 
-        if (isColombiaSelected()) {
+        if (isColombiaSelected() === true) {
           setNativeDepartmentVisible(true);
           setColombiaUiVisible(true);
           init();

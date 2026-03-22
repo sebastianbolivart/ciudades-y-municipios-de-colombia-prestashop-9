@@ -231,9 +231,19 @@ class Ps_colombia_address extends Module
                 ),
                 'autofillPostal'    => (bool) Configuration::get(self::CONFIG_AUTOFILL_POSTAL),
                 'logisticsMode'     => (bool) Configuration::get(self::CONFIG_LOGISTICS_MODE),
+                'colombiaCountryId' => $this->getColombiaCountryId(),
                 'token'             => $token,
             ],
         ]);
+    }
+
+    private function getColombiaCountryId(): int
+    {
+        $countryId = (int) Db::getInstance()->getValue(
+            'SELECT `id_country` FROM `' . bqSQL(_DB_PREFIX_ . 'country') . '` WHERE `iso_code` = \'CO\' LIMIT 1'
+        );
+
+        return $countryId > 0 ? $countryId : 0;
     }
 
     // ─── Public helpers ──────────────────────────────────────────────────────
