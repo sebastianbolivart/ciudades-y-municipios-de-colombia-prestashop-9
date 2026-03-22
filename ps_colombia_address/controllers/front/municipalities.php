@@ -62,37 +62,21 @@ class ps_colombia_addressmunicipalitiesModuleFrontController extends ModuleFront
         if ($mode === 'departments') {
             try {
                 $db = Db::getInstance();
-                $stateTable = $this->resolveSqlTableName($db, 'state');
-                $colombiaCountryId = $this->getColombiaCountryId();
-
-                $rows = [];
-                if ($colombiaCountryId > 0) {
-                    $rows = $db->executeS(
-                        'SELECT s.`id_state`, s.`name`
-                           FROM `' . bqSQL($stateTable) . '` s
-                          WHERE s.`id_country` = ' . $colombiaCountryId . '
-                       ORDER BY s.`name` ASC'
-                    );
-                }
-
-                if (!is_array($rows) || empty($rows)) {
-                    $municipalityTable = $this->resolveSqlTableName($db, 'colombia_municipality');
-                    $rows = $db->executeS(
-                        'SELECT DISTINCT 0 AS `id_state`, `department` AS `name`
-                           FROM `' . bqSQL($municipalityTable) . '`
-                          WHERE `department` <> \'\'
-                       ORDER BY `department` ASC'
-                    );
-                }
+                $municipalityTable = $this->resolveSqlTableName($db, 'colombia_municipality');
+                $rows = $db->executeS(
+                    'SELECT DISTINCT `department` AS `name`
+                       FROM `' . bqSQL($municipalityTable) . '`
+                      WHERE `department` <> \'\'
+                   ORDER BY `department` ASC'
+                );
 
                 $departments = [];
                 if (is_array($rows)) {
                     foreach ($rows as $row) {
                         $name = trim((string) ($row['name'] ?? ''));
-                        $idState = (int) ($row['id_state'] ?? 0);
                         if ($name !== '') {
                             $departments[] = [
-                                'id' => $idState,
+                                'id' => 0,
                                 'name' => $name,
                             ];
                         }
@@ -135,17 +119,13 @@ class ps_colombia_addressmunicipalitiesModuleFrontController extends ModuleFront
                 $stateId = 0;
                 if (is_array($row) && !empty($row['department'])) {
                     $stateTable = $this->resolveSqlTableName($db, 'state');
-                    $colombiaCountryId = $this->getColombiaCountryId();
                     $departmentSql = $this->quoteSqlString((string) $row['department']) . ' COLLATE utf8mb4_unicode_ci';
-                    if ($colombiaCountryId > 0) {
-                        $stateId = (int) $db->getValue(
-                            'SELECT s.`id_state`
-                               FROM `' . bqSQL($stateTable) . '` s
-                              WHERE s.`id_country` = ' . $colombiaCountryId . '
-                                AND s.`name` COLLATE utf8mb4_unicode_ci = ' . $departmentSql . '
-                              LIMIT 1'
-                        );
-                    }
+                    $stateId = (int) $db->getValue(
+                        'SELECT s.`id_state`
+                           FROM `' . bqSQL($stateTable) . '` s
+                          WHERE s.`name` COLLATE utf8mb4_unicode_ci = ' . $departmentSql . '
+                          LIMIT 1'
+                    );
                     $row['id_state'] = $stateId;
                 }
             } catch (\Throwable $e) {
@@ -256,19 +236,6 @@ class ps_colombia_addressmunicipalitiesModuleFrontController extends ModuleFront
     private function quoteSqlString(string $value): string
     {
         return '\'' . pSQL($value, true) . '\'';
-    }
-
-    private function getColombiaCountryId(): int
-    {
-        $db = Db::getInstance();
-        $countryTable = $this->resolveSqlTableName($db, 'country');
-
-        return (int) Db::getInstance()->getValue(
-            'SELECT `id_country`
-               FROM `' . bqSQL($countryTable) . '`
-              WHERE `iso_code` = \'CO\'
-              LIMIT 1'
-        );
     }
 
     private function resolveSqlTableName(Db $db, string $table): string
