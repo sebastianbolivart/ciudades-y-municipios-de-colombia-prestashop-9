@@ -239,11 +239,26 @@ class Ps_colombia_address extends Module
 
     private function getColombiaCountryId(): int
     {
-        $countryId = (int) Db::getInstance()->getValue(
-            'SELECT `id_country` FROM `' . bqSQL(_DB_PREFIX_ . 'country') . '` WHERE `iso_code` = \'CO\' LIMIT 1'
-        );
+        try {
+            $query = new DbQuery();
+            $query->select('`id_country`');
+            $query->from('country');
+            $query->where('`iso_code` = ' . $this->quoteSqlString('CO'));
 
-        return $countryId > 0 ? $countryId : 0;
+            $countryId = (int) Db::getInstance()->getValue((string) $query);
+
+            return $countryId > 0 ? $countryId : 0;
+        } catch (\Throwable $e) {
+            PrestaShopLogger::addLog(
+                '[ps_colombia_address] Failed to resolve Colombia country id: ' . $e->getMessage(),
+                2,
+                null,
+                'Module',
+                (int) $this->id
+            );
+
+            return 0;
+        }
     }
 
     // ─── Public helpers ──────────────────────────────────────────────────────
