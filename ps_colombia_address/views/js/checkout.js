@@ -456,22 +456,45 @@
   /** In-memory cache to avoid duplicate AJAX calls per page load. */
   const municipalitiesCache = Object.create(null);
   const departmentsCache = [];
+  const SELECT_INTERACTION_LOCK_MS = 700;
+  let selectInteractionLockUntil = 0;
 
-  function isAddressSelectFocused() {
-    const active = document.activeElement;
-    if (!active || active.tagName !== 'SELECT') {
+  function isAddressSelectElement(el) {
+    if (!el || el.tagName !== 'SELECT') {
       return false;
     }
 
     return Boolean(
-      active.matches('select[name="id_country"]') ||
-      active.matches('select[name="address[id_country]"]') ||
-      active.matches('select[name="id_state"]') ||
-      active.matches('select[name="address[id_state]"]') ||
-      active.matches('[data-colombia-city-select]') ||
-      active.id === 'id_country' ||
-      active.id === 'id_state'
+      el.matches('select[name="id_country"]') ||
+      el.matches('select[name="address[id_country]"]') ||
+      el.matches('select[name="id_state"]') ||
+      el.matches('select[name="address[id_state]"]') ||
+      el.matches('[data-colombia-city-select]') ||
+      el.id === 'id_country' ||
+      el.id === 'id_state'
     );
+  }
+
+  function isAddressSelectFocused() {
+    const active = document.activeElement;
+    return isAddressSelectElement(active);
+  }
+
+  function lockSelectInteraction() {
+    selectInteractionLockUntil = Date.now() + SELECT_INTERACTION_LOCK_MS;
+  }
+
+  function shouldSkipReinitNow() {
+    return isAddressSelectFocused() || Date.now() < selectInteractionLockUntil;
+  }
+
+  function triggerReinit() {
+    if (shouldSkipReinitNow()) {
+      setTimeout(triggerReinit, 180);
+      return;
+    }
+
+    init();
   }
 
   function shouldHydrateFromSavedCity(savedCity) {
@@ -859,21 +882,34 @@
   setTimeout(init, 350);
 
   // PrestaShop fires this custom event after checkout sections are refreshed.
-  document.addEventListener('updatedAddressForm', init);
-  document.addEventListener('addressFormUpdated', init);
+  document.addEventListener('updatedAddressForm', triggerReinit);
+  document.addEventListener('addressFormUpdated', triggerReinit);
 
   // Also re-init when PrestaShop fires the generic prestashop:* events.
-  document.addEventListener('prestashop:payment-updated', init);
+  document.addEventListener('prestashop:payment-updated', triggerReinit);
+
+  // Lock re-init briefly when the user starts interacting with address selects.
+  document.addEventListener('pointerdown', function (event) {
+    if (isAddressSelectElement(event.target)) {
+      lockSelectInteraction();
+    }
+  }, true);
+
+  document.addEventListener('focusin', function (event) {
+    if (isAddressSelectElement(event.target)) {
+      lockSelectInteraction();
+    }
+  });
 
   const formHost = document.querySelector('.js-address-form') || document.body;
   if (formHost && typeof MutationObserver !== 'undefined') {
     let mutationDebounceTimer = null;
     const observer = new MutationObserver(function () {
-      if (isAddressSelectFocused()) {
+      if (shouldSkipReinitNow()) {
         return;
       }
       clearTimeout(mutationDebounceTimer);
-      mutationDebounceTimer = setTimeout(init, 150);
+      mutationDebounceTimer = setTimeout(triggerReinit, 150);
     });
     observer.observe(formHost, { childList: true, subtree: true });
   }
