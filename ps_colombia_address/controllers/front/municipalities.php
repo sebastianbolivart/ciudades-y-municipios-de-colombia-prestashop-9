@@ -61,8 +61,8 @@ class PsColombiaAddressMunicipalitiesModuleFrontController extends ModuleFrontCo
 
         if ($mode === 'departments') {
             try {
-                $stateTable = bqSQL(_DB_PREFIX_ . 'state');
-                $countryTable = bqSQL(_DB_PREFIX_ . 'country');
+                $stateTable = _DB_PREFIX_ . 'state';
+                $countryTable = _DB_PREFIX_ . 'country';
 
                 $rows = Db::getInstance()->executeS(
                     'SELECT s.`id_state`, s.`name`
@@ -87,7 +87,7 @@ class PsColombiaAddressMunicipalitiesModuleFrontController extends ModuleFrontCo
                 }
             } catch (\Throwable $e) {
                 PrestaShopLogger::addLog(
-                    '[ps_colombia_address] AJAX departments error: ' . $e->getMessage(),
+                    '[ps_colombia_address] AJAX departments error: ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine(),
                     3
                 );
                 $this->jsonError('Internal server error.', 500);
@@ -109,9 +109,9 @@ class PsColombiaAddressMunicipalitiesModuleFrontController extends ModuleFrontCo
             }
 
             try {
-                $municipalityTable = bqSQL(_DB_PREFIX_ . 'colombia_municipality');
-                $stateTable = bqSQL(_DB_PREFIX_ . 'state');
-                $countryTable = bqSQL(_DB_PREFIX_ . 'country');
+                $municipalityTable = _DB_PREFIX_ . 'colombia_municipality';
+                $stateTable = _DB_PREFIX_ . 'state';
+                $countryTable = _DB_PREFIX_ . 'country';
 
                 $row = Db::getInstance()->getRow(
                     'SELECT m.`department`, m.`municipality`, m.`postal_code`, m.`dane_code`, m.`latitude`, m.`longitude`, s.`id_state`
@@ -122,7 +122,7 @@ class PsColombiaAddressMunicipalitiesModuleFrontController extends ModuleFrontCo
                 );
             } catch (\Throwable $e) {
                 PrestaShopLogger::addLog(
-                    '[ps_colombia_address] AJAX municipality lookup error: ' . $e->getMessage(),
+                    '[ps_colombia_address] AJAX municipality lookup error: ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine(),
                     3
                 );
                 $this->jsonError('Internal server error.', 500);
@@ -155,7 +155,7 @@ class PsColombiaAddressMunicipalitiesModuleFrontController extends ModuleFrontCo
 
         // Fetch municipalities directly via DB (same pattern as departments endpoint).
         try {
-            $municipalityTable = bqSQL(_DB_PREFIX_ . 'colombia_municipality');
+            $municipalityTable = _DB_PREFIX_ . 'colombia_municipality';
 
             $rows = Db::getInstance()->executeS(
                 'SELECT `municipality`, `postal_code`, `dane_code`, `latitude`, `longitude`
@@ -178,7 +178,7 @@ class PsColombiaAddressMunicipalitiesModuleFrontController extends ModuleFrontCo
             }
         } catch (\Throwable $e) {
             PrestaShopLogger::addLog(
-                '[ps_colombia_address] AJAX municipalities error: ' . $e->getMessage(),
+                '[ps_colombia_address] AJAX municipalities error: ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine(),
                 3
             );
             $this->jsonError('Internal server error.', 500);
