@@ -12,7 +12,7 @@
  *   - displayHeader                      (inject JS + config vars)
  *
  * @author  Custom
- * @version 1.0.2
+ * @version 1.0.3
  * @license MIT
  */
 
@@ -46,7 +46,7 @@ class Ps_colombia_address extends Module
     {
         $this->name            = 'ps_colombia_address';
         $this->tab             = 'administration';
-        $this->version         = '1.0.2';
+        $this->version         = '1.0.3';
         $this->author          = 'Custom';
         $this->need_instance   = 0;
         $this->bootstrap       = true;
@@ -318,24 +318,32 @@ class Ps_colombia_address extends Module
         try {
             $db = Db::getInstance();
             $addressTable = $this->resolveSqlTableName($db, 'address');
-            $stateTable = $this->resolveSqlTableName($db, 'state');
 
             $row = $db->getRow(
-                'SELECT a.`city`, a.`id_state`, s.`name` AS `department`'
-                . ' FROM `' . bqSQL($addressTable) . '` a'
-                . ' LEFT JOIN `' . bqSQL($stateTable) . '` s ON s.`id_state` = a.`id_state`'
-                . ' WHERE a.`id_address` = ' . $idAddress
-                . ' LIMIT 1'
+                'SELECT `city`, `id_state`'
+                . ' FROM `' . bqSQL($addressTable) . '`'
+                . ' WHERE `id_address` = ' . $idAddress
             );
 
             if (!is_array($row)) {
                 return ['city' => '', 'state_id' => 0, 'department' => ''];
             }
 
+            $departmentName = '';
+            $stateId = (int) ($row['id_state'] ?? 0);
+            if ($stateId > 0) {
+                $stateTable = $this->resolveSqlTableName($db, 'state');
+                $departmentName = (string) $db->getValue(
+                    'SELECT `name`'
+                    . ' FROM `' . bqSQL($stateTable) . '`'
+                    . ' WHERE `id_state` = ' . $stateId
+                );
+            }
+
             return [
                 'city' => (string) ($row['city'] ?? ''),
-                'state_id' => (int) ($row['id_state'] ?? 0),
-                'department' => (string) ($row['department'] ?? ''),
+                'state_id' => $stateId,
+                'department' => $departmentName,
             ];
         } catch (\Throwable $e) {
             PrestaShopLogger::addLog(
