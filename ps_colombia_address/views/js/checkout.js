@@ -165,6 +165,25 @@
     return String(selected.textContent || '').trim();
   }
 
+  function normalizeLabel(label) {
+    return String(label || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+  }
+
+  function isDepartmentPlaceholder(label) {
+    const normalized = normalizeLabel(label);
+    return normalized === '' || normalized.indexOf('seleccione un departamento') !== -1;
+  }
+
+  function getSelectedDepartmentName(select) {
+    const label = getSelectedOptionText(select);
+    return isDepartmentPlaceholder(label) ? '' : label;
+  }
+
   function getDepartmentFieldName() {
     const nativeSelect = getNativeDepartmentSelect();
     if (nativeSelect && nativeSelect.name) {
@@ -185,9 +204,12 @@
       return { id: '', name: '' };
     }
 
+    const selectedName = getSelectedDepartmentName(deptSelect);
+    const selectedId = String(deptSelect.value || '').trim();
+
     return {
-      id: String(deptSelect.value || '').trim(),
-      name: getSelectedOptionText(deptSelect),
+      id: selectedName ? selectedId : '',
+      name: selectedName,
     };
   }
 
@@ -557,6 +579,7 @@
     const municipalitySelect = getMunicipalitySelect();
     if (!savedCity) return false;
     if (!deptSelect) return true;
+    if (!getSelectedDepartmentName(deptSelect)) return true;
     if (!deptSelect.value) return true;
     if (!municipalitySelect) return false;
     return !municipalitySelect.value;
@@ -597,8 +620,9 @@
 
     if (departmentsCache.length > 0) {
       populateDepartments(deptSelect, departmentsCache, preselect);
-      if (getSelectedOptionText(deptSelect)) {
-        loadMunicipalities(getSelectedOptionText(deptSelect), preselectMunicipality);
+      const selectedDepartmentName = getSelectedDepartmentName(deptSelect) || String(preselect.name || '');
+      if (selectedDepartmentName) {
+        loadMunicipalities(selectedDepartmentName, preselectMunicipality);
       }
       return;
     }
@@ -634,8 +658,9 @@
         populateDepartments(deptSelect, data.departments, preselect);
         deptSelect.disabled = false;
 
-        if (getSelectedOptionText(deptSelect)) {
-          loadMunicipalities(getSelectedOptionText(deptSelect), preselectMunicipality);
+        const selectedDepartmentName = getSelectedDepartmentName(deptSelect) || String(preselect.name || '');
+        if (selectedDepartmentName) {
+          loadMunicipalities(selectedDepartmentName, preselectMunicipality);
         }
       })
       .catch(function (err) {
@@ -647,6 +672,7 @@
   }
 
   function populateDepartments(selectEl, departments, preselect) {
+    const expectedName = normalizeLabel(preselect && preselect.name ? preselect.name : '');
     selectEl.innerHTML = '';
     selectEl.appendChild(createOption('', '— Seleccione un departamento —'));
 
@@ -655,7 +681,7 @@
       const name = String((department && department.name) || '');
       const isSelected = (
         (preselect.id && id === String(preselect.id)) ||
-        (preselect.name && name === String(preselect.name))
+        (expectedName && normalizeLabel(name) === expectedName)
       );
 
       selectEl.appendChild(createOption(id, name, isSelected));
@@ -862,7 +888,9 @@
     const hydrationKey = getHydrationKey(colombia, preselectedDepartment, preselectedCity);
 
     const runInitialHydration = function () {
-      if (preselectedDepartment && (preselectedDepartment.id || preselectedDepartment.name)) {
+      const hasReliableDepartment = Boolean(preselectedDepartment && preselectedDepartment.name);
+
+      if (hasReliableDepartment) {
         loadDepartments(preselectedDepartment, preselectedCity);
         return;
       }
