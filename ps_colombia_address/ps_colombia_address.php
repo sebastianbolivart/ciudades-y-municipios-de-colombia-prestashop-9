@@ -12,7 +12,7 @@
  *   - displayHeader                      (inject JS + config vars)
  *
  * @author  Custom
- * @version 1.0.3
+ * @version 1.0.4
  * @license MIT
  */
 
@@ -46,7 +46,7 @@ class Ps_colombia_address extends Module
     {
         $this->name            = 'ps_colombia_address';
         $this->tab             = 'administration';
-        $this->version         = '1.0.3';
+        $this->version         = '1.0.4';
         $this->author          = 'Custom';
         $this->need_instance   = 0;
         $this->bootstrap       = true;
