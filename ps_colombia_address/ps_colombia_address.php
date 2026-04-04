@@ -12,7 +12,7 @@
  *   - displayHeader                      (inject JS + config vars)
  *
  * @author  Custom
- * @version 1.0.0
+ * @version 1.0.2
  * @license MIT
  */
 
@@ -46,7 +46,7 @@ class Ps_colombia_address extends Module
     {
         $this->name            = 'ps_colombia_address';
         $this->tab             = 'administration';
-        $this->version         = '1.0.0';
+        $this->version         = '1.0.2';
         $this->author          = 'Custom';
         $this->need_instance   = 0;
         $this->bootstrap       = true;
@@ -220,6 +220,7 @@ class Ps_colombia_address extends Module
 
         // Token for AJAX request validation.
         $token = Tools::getToken(false);
+        $currentAddressId = (int) Tools::getValue('id_address');
 
         Media::addJsDef([
             'colombiaAddressConfig' => [
@@ -232,9 +233,121 @@ class Ps_colombia_address extends Module
                 'autofillPostal'    => (bool) Configuration::get(self::CONFIG_AUTOFILL_POSTAL),
                 'logisticsMode'     => (bool) Configuration::get(self::CONFIG_LOGISTICS_MODE),
                 'colombiaCountryId' => $this->getColombiaCountryId(),
+                'departments'       => $this->getFrontendDepartments(),
+                'currentAddressId'  => $currentAddressId,
+                'savedAddress'      => $this->getAddressHydrationData($currentAddressId),
                 'token'             => $token,
             ],
         ]);
+    }
+
+    /**
+     * Provide a stable list of Colombian departments with real id_state values
+     * for front-office hydration and interaction.
+     *
+     * @return array<int, array{id: int, name: string}>
+     */
+    private function getFrontendDepartments(): array
+    {
+        try {
+            $db = Db::getInstance();
+            $stateTable = $this->resolveSqlTableName($db, 'state');
+            $countryId = $this->getColombiaCountryId();
+
+            $rows = [];
+            if ($countryId > 0) {
+                $rows = $db->executeS(
+                    'SELECT `id_state`, `name`'
+                    . ' FROM `' . bqSQL($stateTable) . '`'
+                    . ' WHERE `id_country` = ' . $countryId
+                    . ' ORDER BY `name` ASC'
+                );
+            }
+
+            if (!is_array($rows) || empty($rows)) {
+                $municipalityTable = $this->resolveSqlTableName($db, 'colombia_municipality');
+                $rows = $db->executeS(
+                    'SELECT DISTINCT `department` AS `name`'
+                    . ' FROM `' . bqSQL($municipalityTable) . '`'
+                    . ' WHERE `department` <> \'\''
+                    . ' ORDER BY `department` ASC'
+                );
+            }
+
+            $departments = [];
+            if (is_array($rows)) {
+                foreach ($rows as $row) {
+                    $name = trim((string) ($row['name'] ?? ''));
+                    if ($name === '') {
+                        continue;
+                    }
+
+                    $departments[] = [
+                        'id' => (int) ($row['id_state'] ?? 0),
+                        'name' => $name,
+                    ];
+                }
+            }
+
+            return $departments;
+        } catch (\Throwable $e) {
+            PrestaShopLogger::addLog(
+                '[ps_colombia_address] Failed to build frontend departments list: ' . $e->getMessage(),
+                2,
+                null,
+                'Module',
+                (int) $this->id
+            );
+
+            return [];
+        }
+    }
+
+    /**
+     * Provide stable hydration data for edit-address pages.
+     * This avoids depending on theme-rendered field values when reopening an address.
+     *
+     * @return array{city: string, state_id: int, department: string}
+     */
+    private function getAddressHydrationData(int $idAddress): array
+    {
+        if ($idAddress <= 0) {
+            return ['city' => '', 'state_id' => 0, 'department' => ''];
+        }
+
+        try {
+            $db = Db::getInstance();
+            $addressTable = $this->resolveSqlTableName($db, 'address');
+            $stateTable = $this->resolveSqlTableName($db, 'state');
+
+            $row = $db->getRow(
+                'SELECT a.`city`, a.`id_state`, s.`name` AS `department`'
+                . ' FROM `' . bqSQL($addressTable) . '` a'
+                . ' LEFT JOIN `' . bqSQL($stateTable) . '` s ON s.`id_state` = a.`id_state`'
+                . ' WHERE a.`id_address` = ' . $idAddress
+                . ' LIMIT 1'
+            );
+
+            if (!is_array($row)) {
+                return ['city' => '', 'state_id' => 0, 'department' => ''];
+            }
+
+            return [
+                'city' => (string) ($row['city'] ?? ''),
+                'state_id' => (int) ($row['id_state'] ?? 0),
+                'department' => (string) ($row['department'] ?? ''),
+            ];
+        } catch (\Throwable $e) {
+            PrestaShopLogger::addLog(
+                '[ps_colombia_address] Failed to build address hydration data: ' . $e->getMessage(),
+                2,
+                null,
+                'Module',
+                (int) $this->id
+            );
+
+            return ['city' => '', 'state_id' => 0, 'department' => ''];
+        }
     }
 
     private function getColombiaCountryId(): int

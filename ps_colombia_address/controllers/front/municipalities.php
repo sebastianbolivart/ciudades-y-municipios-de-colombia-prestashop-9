@@ -97,6 +97,44 @@ class ps_colombia_addressmunicipalitiesModuleFrontController extends ModuleFront
 
         $lookup = Tools::strtolower((string) Tools::getValue('lookup', ''));
 
+        if ($lookup === 'address') {
+            $idAddress = (int) Tools::getValue('id_address', 0);
+
+            if ($idAddress <= 0) {
+                $this->jsonError('Missing or invalid "id_address" parameter.', 400);
+            }
+
+            try {
+                $db = Db::getInstance();
+                $addressTable = $this->resolveSqlTableName($db, 'address');
+
+                $row = $db->getRow(
+                    'SELECT a.`city`, a.`id_state`
+                       FROM `' . bqSQL($addressTable) . '` a
+                      WHERE a.`id_address` = ' . $idAddress . '
+                      LIMIT 1'
+                );
+            } catch (\Throwable $e) {
+                PrestaShopLogger::addLog(
+                    '[ps_colombia_address] AJAX address lookup error: ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine(),
+                    3
+                );
+                $this->jsonError('Internal server error.', 500);
+            }
+
+            if (!is_array($row) || (empty($row['city']) && empty($row['id_state']))) {
+                $this->jsonError('Address not found.', 404);
+            }
+
+            header('Cache-Control: public, max-age=600, s-maxage=3600');
+            header('Vary: Accept-Encoding');
+            $this->jsonSuccess([
+                'city' => (string) ($row['city'] ?? ''),
+                'state_id' => (int) ($row['id_state'] ?? 0),
+                'department' => '',
+            ]);
+        }
+
         if ($lookup === 'municipality') {
             $rawMunicipality = (string) Tools::getValue('municipality', '');
             $municipality = $this->sanitiseDepartment($rawMunicipality);
@@ -108,26 +146,13 @@ class ps_colombia_addressmunicipalitiesModuleFrontController extends ModuleFront
             try {
                 $db = Db::getInstance();
                 $municipalityTable = $this->resolveSqlTableName($db, 'colombia_municipality');
-                $municipalitySql = $this->quoteSqlString($municipality) . ' COLLATE utf8mb4_unicode_ci';
+                $municipalitySql = $this->quoteSqlString($municipality);
 
                 $row = $db->getRow(
                     'SELECT m.`department`, m.`municipality`, m.`postal_code`, m.`dane_code`, m.`latitude`, m.`longitude`
                        FROM `' . bqSQL($municipalityTable) . '` m
-                      WHERE m.`municipality` COLLATE utf8mb4_unicode_ci = ' . $municipalitySql
+                      WHERE m.`municipality` = ' . $municipalitySql
                 );
-
-                $stateId = 0;
-                if (is_array($row) && !empty($row['department'])) {
-                    $stateTable = $this->resolveSqlTableName($db, 'state');
-                    $departmentSql = $this->quoteSqlString((string) $row['department']) . ' COLLATE utf8mb4_unicode_ci';
-                    $stateId = (int) $db->getValue(
-                        'SELECT s.`id_state`
-                           FROM `' . bqSQL($stateTable) . '` s
-                          WHERE s.`name` COLLATE utf8mb4_unicode_ci = ' . $departmentSql . '
-                          LIMIT 1'
-                    );
-                    $row['id_state'] = $stateId;
-                }
             } catch (\Throwable $e) {
                 PrestaShopLogger::addLog(
                     '[ps_colombia_address] AJAX municipality lookup error: ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine(),
@@ -143,7 +168,7 @@ class ps_colombia_addressmunicipalitiesModuleFrontController extends ModuleFront
             header('Cache-Control: public, max-age=600, s-maxage=3600');
             header('Vary: Accept-Encoding');
             $this->jsonSuccess([
-                'state_id' => (int) ($row['id_state'] ?? 0),
+                'state_id' => 0,
                 'department' => (string) ($row['department'] ?? ''),
                 'municipality' => (string) ($row['municipality'] ?? ''),
                 'postal_code' => (string) ($row['postal_code'] ?? ''),
@@ -165,12 +190,12 @@ class ps_colombia_addressmunicipalitiesModuleFrontController extends ModuleFront
         try {
                 $db = Db::getInstance();
                 $municipalityTable = $this->resolveSqlTableName($db, 'colombia_municipality');
-            $departmentSql = $this->quoteSqlString($department) . ' COLLATE utf8mb4_unicode_ci';
+            $departmentSql = $this->quoteSqlString($department);
 
                 $rows = $db->executeS(
                 'SELECT `municipality`, `postal_code`, `dane_code`, `latitude`, `longitude`
                          FROM `' . bqSQL($municipalityTable) . '`
-                  WHERE `department` COLLATE utf8mb4_unicode_ci = ' . $departmentSql . '
+                  WHERE `department` = ' . $departmentSql . '
                ORDER BY `municipality` ASC'
             );
 

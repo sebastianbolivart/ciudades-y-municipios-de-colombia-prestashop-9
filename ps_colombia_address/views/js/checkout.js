@@ -184,6 +184,119 @@
     return isDepartmentPlaceholder(label) ? '' : label;
   }
 
+  function findOptionByValue(select, value) {
+    if (!select || !select.options) return null;
+    const normalizedValue = String(value || '');
+    for (let index = 0; index < select.options.length; index += 1) {
+      if (String(select.options[index].value || '') === normalizedValue) {
+        return select.options[index];
+      }
+    }
+    return null;
+  }
+
+  function findOptionByLabel(select, label) {
+    if (!select || !select.options) return null;
+    const normalizedLabel = normalizeLabel(label);
+    if (!normalizedLabel) return null;
+
+    for (let index = 0; index < select.options.length; index += 1) {
+      if (normalizeLabel(select.options[index].textContent || '') === normalizedLabel) {
+        return select.options[index];
+      }
+    }
+    return null;
+  }
+
+  function ensureSelectedOption(select, value, label) {
+    if (!select) return null;
+
+    let option = null;
+    if (value !== undefined && value !== null && String(value) !== '') {
+      option = findOptionByValue(select, value);
+    }
+    if (!option && label) {
+      option = findOptionByLabel(select, label);
+    }
+
+    if (!option) {
+      option = createOption(String(value || ''), String(label || value || ''), true);
+      select.appendChild(option);
+    }
+
+    option.selected = true;
+    select.value = String(option.value || '');
+    return option;
+  }
+
+  function prefillSavedSelections(savedAddress) {
+    if (!savedAddress) return;
+
+    const deptSelect = ensureDepartmentSelect();
+    const municipalitySelect = getMunicipalitySelect();
+
+    if (deptSelect && savedAddress.department) {
+      ensureSelectedOption(deptSelect, savedAddress.stateId, savedAddress.department);
+    }
+
+    if (municipalitySelect && savedAddress.city) {
+      ensureSelectedOption(municipalitySelect, savedAddress.city, savedAddress.city);
+      municipalitySelect.disabled = false;
+    }
+  }
+
+  function buildDepartmentsFromSelect(select) {
+    if (!select || !select.options) {
+      return [];
+    }
+
+    const seen = Object.create(null);
+    const departments = [];
+
+    for (let index = 0; index < select.options.length; index += 1) {
+      const option = select.options[index];
+      const name = String(option.textContent || '').trim();
+      const id = String(option.value || '').trim();
+
+      if (isDepartmentPlaceholder(name)) {
+        continue;
+      }
+
+      const key = normalizeLabel(name);
+      if (!key || seen[key]) {
+        continue;
+      }
+
+      seen[key] = true;
+      departments.push({ id: id, name: name });
+    }
+
+    return departments;
+  }
+
+  function getDepartmentSource(preselect) {
+    if (departmentsCache.length > 0) {
+      return departmentsCache.slice();
+    }
+
+    if (CONFIG && Array.isArray(CONFIG.departments) && CONFIG.departments.length > 0) {
+      Array.prototype.push.apply(departmentsCache, CONFIG.departments);
+      return departmentsCache.slice();
+    }
+
+    const nativeOptions = buildDepartmentsFromSelect(getNativeDepartmentSelect());
+    if (nativeOptions.length > 0) {
+      Array.prototype.push.apply(departmentsCache, nativeOptions);
+      return departmentsCache.slice();
+    }
+
+    if (preselect && preselect.name) {
+      return [{ id: String(preselect.id || ''), name: String(preselect.name) }];
+    }
+
+    return [];
+  }
+
   function getDepartmentFieldName() {
     const nativeSelect = getNativeDepartmentSelect();
     if (nativeSelect && nativeSelect.name) {
@@ -221,8 +334,9 @@
     const departmentId = departmentSelection && departmentSelection.id ? String(departmentSelection.id) : '';
     const departmentName = departmentSelection && departmentSelection.name ? String(departmentSelection.name) : '';
     const city = cityValue ? String(cityValue) : '';
+    const addressId = CONFIG && CONFIG.currentAddressId ? String(CONFIG.currentAddressId) : '';
 
-    return ['country:co', departmentId, departmentName, city].join('|');
+    return ['country:co', departmentId, departmentName, city, addressId].join('|');
   }
 
   function isColombiaSelected() {
@@ -611,6 +725,68 @@
       });
   }
 
+  function lookupAddress(addressId) {
+    if (!addressId) {
+      return Promise.resolve(null);
+    }
+
+    const url = new URL(CONFIG.baseUrl, window.location.href);
+    url.searchParams.set('lookup', 'address');
+    url.searchParams.set('id_address', String(addressId));
+    url.searchParams.set('token', CONFIG.token);
+
+    return fetch(url.toString(), {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+      credentials: 'same-origin',
+    })
+      .then(function (response) {
+        if (!response.ok) {
+          return null;
+        }
+        return parseJsonResponse(response);
+      })
+      .catch(function () {
+        return null;
+      });
+  }
+
+  function getConfiguredSavedAddress() {
+    if (!CONFIG || !CONFIG.savedAddress || typeof CONFIG.savedAddress !== 'object') {
+      return null;
+    }
+
+    const city = String(CONFIG.savedAddress.city || '').trim();
+    const department = String(CONFIG.savedAddress.department || '').trim();
+    const stateId = String(CONFIG.savedAddress.state_id || '').trim();
+
+    if (!city && !department && !stateId) {
+      return null;
+    }
+
+    return {
+      city: city,
+      department: department,
+      stateId: stateId,
+    };
+  }
+
+  function findDepartmentStateIdByName(departmentName) {
+    const target = normalizeLabel(departmentName);
+    if (!target || !CONFIG || !Array.isArray(CONFIG.departments)) {
+      return '';
+    }
+
+    for (let index = 0; index < CONFIG.departments.length; index += 1) {
+      const department = CONFIG.departments[index] || {};
+      if (normalizeLabel(department.name || '') === target) {
+        return String(department.id || '');
+      }
+    }
+
+    return '';
+  }
+
   function loadDepartments(preselect, preselectMunicipality) {
     const deptSelect = ensureDepartmentSelect();
     if (!deptSelect) return;
@@ -618,57 +794,18 @@
     preselect = preselect || {};
     preselectMunicipality = preselectMunicipality || '';
 
-    if (departmentsCache.length > 0) {
-      populateDepartments(deptSelect, departmentsCache, preselect);
-      const selectedDepartmentName = getSelectedDepartmentName(deptSelect) || String(preselect.name || '');
-      if (selectedDepartmentName) {
-        loadMunicipalities(selectedDepartmentName, preselectMunicipality);
-      }
-      return;
+    const departments = getDepartmentSource(preselect);
+    deptSelect.disabled = false;
+    populateDepartments(deptSelect, departments, preselect);
+
+    if (departments.length === 0 && preselect && (preselect.id || preselect.name)) {
+      ensureSelectedOption(deptSelect, preselect.id, preselect.name);
     }
 
-    deptSelect.disabled = true;
-    deptSelect.innerHTML = '';
-    deptSelect.appendChild(createOption('', 'Cargando…'));
-
-    const url = new URL(CONFIG.baseUrl, window.location.href);
-    url.searchParams.set('list', 'departments');
-    url.searchParams.set('token', CONFIG.token);
-
-    fetch(url.toString(), {
-      method: 'GET',
-      headers: { 'Accept': 'application/json' },
-      credentials: 'same-origin',
-    })
-      .then(function (response) {
-        if (!response.ok) {
-          return response.text().then(function (body) {
-            throw new Error('HTTP ' + response.status + ' - ' + body);
-          });
-        }
-        return parseJsonResponse(response);
-      })
-      .then(function (data) {
-        if (!data || !Array.isArray(data.departments)) {
-          throw new Error('Unexpected response format');
-        }
-
-        departmentsCache.length = 0;
-        Array.prototype.push.apply(departmentsCache, data.departments);
-        populateDepartments(deptSelect, data.departments, preselect);
-        deptSelect.disabled = false;
-
-        const selectedDepartmentName = getSelectedDepartmentName(deptSelect) || String(preselect.name || '');
-        if (selectedDepartmentName) {
-          loadMunicipalities(selectedDepartmentName, preselectMunicipality);
-        }
-      })
-      .catch(function (err) {
-        console.error('[ps_colombia_address] Failed to load departments:', err);
-        deptSelect.innerHTML = '';
-        deptSelect.appendChild(createOption('', '— Error al cargar —'));
-        deptSelect.disabled = false;
-      });
+    const selectedDepartmentName = getSelectedDepartmentName(deptSelect) || String(preselect.name || '');
+    if (selectedDepartmentName) {
+      loadMunicipalities(selectedDepartmentName, preselectMunicipality);
+    }
   }
 
   function populateDepartments(selectEl, departments, preselect) {
@@ -773,6 +910,7 @@
 
     // If preselect was set, trigger change to auto-fill fields.
     if (preselect) {
+      ensureSelectedOption(selectEl, preselect, preselect);
       onMunicipalityChange({ target: selectEl });
     }
   }
@@ -868,6 +1006,10 @@
     const cityField = getCityField();
     const preselectedCity = cityField ? String(cityField.value || '').trim() : '';
     const preselectedDepartment = getInitialDepartmentSelection();
+    const currentAddressId = CONFIG && CONFIG.currentAddressId ? parseInt(CONFIG.currentAddressId, 10) : 0;
+    const configuredSavedAddress = getConfiguredSavedAddress();
+
+    prefillSavedSelections(configuredSavedAddress);
 
     hideOptionalAddressFields();
     reorderAddressGroups();
@@ -895,7 +1037,67 @@
         return;
       }
 
+      if (configuredSavedAddress && (configuredSavedAddress.department || configuredSavedAddress.city)) {
+        if (configuredSavedAddress.department) {
+          loadDepartments({
+            id: configuredSavedAddress.stateId,
+            name: configuredSavedAddress.department,
+          }, configuredSavedAddress.city);
+          return;
+        }
+
+        if (configuredSavedAddress.city) {
+          lookupMunicipality(configuredSavedAddress.city).then(function (data) {
+            if (!data || !data.department) {
+              loadDepartments({ id: '', name: '' }, configuredSavedAddress.city);
+              return;
+            }
+
+            loadDepartments({
+              id: String(data.state_id || findDepartmentStateIdByName(data.department) || ''),
+              name: String(data.department || ''),
+            }, String(data.municipality || configuredSavedAddress.city || ''));
+          });
+          return;
+        }
+      }
+
       if (!preselectedCity) {
+        if (currentAddressId > 0) {
+          lookupAddress(currentAddressId).then(function (addressData) {
+            if (!addressData || (!addressData.city && !addressData.department)) {
+              loadDepartments({ id: '', name: '' }, '');
+              return;
+            }
+
+            if (addressData.department) {
+              loadDepartments({
+                id: String(addressData.state_id || ''),
+                name: String(addressData.department || ''),
+              }, String(addressData.city || ''));
+              return;
+            }
+
+            if (addressData.city) {
+              lookupMunicipality(String(addressData.city)).then(function (data) {
+                if (!data || !data.department) {
+                  loadDepartments({ id: '', name: '' }, String(addressData.city || ''));
+                  return;
+                }
+
+                loadDepartments({
+                  id: String(data.state_id || findDepartmentStateIdByName(data.department) || ''),
+                  name: String(data.department || ''),
+                }, String(data.municipality || addressData.city || ''));
+              });
+              return;
+            }
+
+            loadDepartments({ id: '', name: '' }, '');
+          });
+          return;
+        }
+
         loadDepartments({ id: '', name: '' }, '');
         return;
       }
@@ -912,7 +1114,7 @@
         }
 
         loadDepartments({
-          id: String(data.state_id || ''),
+          id: String(data.state_id || findDepartmentStateIdByName(data.department) || ''),
           name: String(data.department || ''),
         }, String(data.municipality || preselectedCity || ''));
       });
